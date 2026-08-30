@@ -6,6 +6,7 @@ import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
 import { MOBILE, nativeLoad, nativeSave, syncReminder } from '../lib/mobile.js'
 
 const KEY = 'gym_state_v1'
+const REV_KEY = 'gym_state_revisions_v1'
 export const DEF = {
   unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
   theme: 'dark', accent: 'lime', body: 'male', targetW: null,
@@ -75,6 +76,7 @@ export const useStore = create((set, get) => {
     get().setUser(null)
     localStorage.removeItem('gym_guest')
     localStorage.removeItem('gym_dirty')
+    localStorage.removeItem(REV_KEY)
     localStorage.removeItem(KEY)
     persist(clone(DEF), false)
   }
@@ -82,7 +84,14 @@ export const useStore = create((set, get) => {
   return {
     S: (() => { const s = loadState(); registerCustom(s.customEx); return s })(),
     user: (() => { try { return JSON.parse(localStorage.getItem('gym_user')) || null } catch { return null } })(),
+    revisions: (() => { try { return JSON.parse(localStorage.getItem(REV_KEY)) || { plan: 0, progress: 0 } } catch { return { plan: 0, progress: 0 } } })(),
     ready: false,
+
+    setRevisions(revisions) {
+      const next = { plan: Number(revisions?.plan) || 0, progress: Number(revisions?.progress) || 0 }
+      localStorage.setItem(REV_KEY, JSON.stringify(next))
+      set({ revisions: next })
+    },
 
     // Mutate a draft of S via producer fn, then persist + schedule sync.
     update(mut, push = true) {
@@ -104,12 +113,26 @@ export const useStore = create((set, get) => {
     async pushState() {
       if (!get().user) return
       clearTimeout(pushTm)
-      try { await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S }) }); localStorage.removeItem('gym_dirty') }
+      try {
+        const result = await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S, revisions: get().revisions }) })
+        get().setRevisions(result.revisions)
+        if (result.state) {
+          const active = get().S.active
+          const next = Object.assign(clone(DEF), result.state)
+          if (active) next.active = active
+          persist(next, false)
+        }
+        if (result.conflicts?.includes('plan')) {
+          import('./useUI.js').then(({ useUI }) => useUI.getState().toast('Your trainer updated your plan — the trainer version was applied.'))
+        }
+        localStorage.removeItem('gym_dirty')
+      }
       catch (e) { localStorage.setItem('gym_dirty', '1') }
     },
     async pullState() {
       try {
-        const { state } = await api('/api/data')
+        const { state, revisions } = await api('/api/data')
+        get().setRevisions(revisions)
         const S = get().S
         const dirty = localStorage.getItem('gym_dirty') === '1'
         if (state && (!hasData(S) || ((state._ts || 0) >= (S._ts || 0) && !dirty))) {
@@ -142,6 +165,7 @@ export const useStore = create((set, get) => {
     async resetDemo() {
       const { buildDemoState } = await import('../lib/demoSeed.js')
       localStorage.removeItem('gym_dirty')
+      localStorage.removeItem(REV_KEY)
       persist(Object.assign(clone(DEF), buildDemoState()), false)
     },
 

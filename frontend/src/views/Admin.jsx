@@ -8,6 +8,9 @@ import { workoutVolume, setsDone } from '../lib/history.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
+import LineChart from '../components/LineChart.jsx'
+import { EXDB, EXIDX } from '../lib/exercises.js'
+import { estimate1RM } from '../lib/onerm.js'
 
 // Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
 // Deliberately English-only — it isn't part of the translated end-user surface, so it stays
@@ -23,24 +26,101 @@ const rel = ts => {
 }
 const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60) + 'm' }
 
+const clone = value => JSON.parse(JSON.stringify(value))
+const makeId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+
+function TrainerPlanEditor({ detail, onSaved, onCancel }) {
+  const [plan, setPlan] = useState(() => clone(detail.plan))
+  const [saving, setSaving] = useState(false)
+  const toast = useUI(s => s.toast)
+  const updateRoutine = (index, fn) => setPlan(p => { const n = clone(p); fn(n.routines[index]); return n })
+  const addRoutine = () => setPlan(p => ({ ...p, routines: [...p.routines, { id: makeId(), name: 'New routine', emoji: 'dumbbell', ex: [] }] }))
+  const addCustom = () => {
+    const name = window.prompt('Custom exercise name')?.trim()
+    if (!name) return
+    const bodyPart = window.prompt('Body part', 'other')?.trim() || 'other'
+    setPlan(p => ({ ...p, customEx: [...(p.customEx || []), { id: 'custom-' + makeId(), n: name, bp: bodyPart, tg: bodyPart, eq: 'custom', custom: true }] }))
+  }
+  const save = () => confirmSheet({
+    title: 'Replace client plan?',
+    message: `Save this plan for ${detail.user.name}? Their next sync will receive this trainer version.`,
+    confirmText: 'Save plan',
+    onConfirm: async () => {
+      setSaving(true)
+      try {
+        const result = await api('/api/admin/client/plan', { method: 'PUT', body: JSON.stringify({ id: detail.user.id, plan, baseVersion: detail.revisions.plan }) })
+        toast('Trainer plan saved'); onSaved(result)
+      } catch (e) { toast(e.message) } finally { setSaving(false) }
+    }
+  })
+  return <div>
+    <div className="row between"><h3 style={{ margin: 0 }}>Editing {detail.user.name}'s plan</h3><span className="tag acc">isolated editor</span></div>
+    <div className="small muted" style={{ margin: '7px 0 14px' }}>Changes affect this client only. Workout history and weigh-ins are read-only.</div>
+    {(plan.routines || []).map((routine, ri) => <div className="card" key={routine.id} style={{ marginBottom: 10 }}>
+      <div className="row" style={{ gap: 8 }}>
+        <input className="input" value={routine.name} aria-label="Routine name" onChange={e => updateRoutine(ri, r => { r.name = e.target.value })} />
+        <button className="iconbtn" aria-label="Delete routine" onClick={() => setPlan(p => ({ ...p, routines: p.routines.filter((_, i) => i !== ri) }))}><Icon name="trash" /></button>
+      </div>
+      <div className="list" style={{ marginTop: 8 }}>
+        {(routine.ex || []).map((entry, ei) => <div key={entry.id + '-' + ei} style={{ padding: '8px 0', borderBottom: '1px solid var(--sep)' }}>
+          <div className="row between"><span className="small capitalize" style={{ fontWeight: 600 }}>{EXIDX[entry.id]?.n || (plan.customEx || []).find(e => e.id === entry.id)?.n || entry.id}</span>
+            <button className="iconbtn" aria-label="Remove exercise" onClick={() => updateRoutine(ri, r => { r.ex.splice(ei, 1) })}><Icon name="trash" /></button></div>
+          <div className="row" style={{ gap: 6, marginTop: 6 }}>
+            {['sets', 'reps', 'weight'].map(field => <label className="small" style={{ flex: 1 }} key={field}>{field}<input className="input" type="number" min="0" step={field === 'weight' ? '.5' : '1'} value={entry[field] ?? (field === 'weight' ? 0 : field === 'sets' ? 3 : 10)} onChange={e => updateRoutine(ri, r => { r.ex[ei][field] = +e.target.value })} /></label>)}
+          </div>
+        </div>)}
+      </div>
+      <select className="input" defaultValue="" style={{ marginTop: 8 }} onChange={e => { const id = e.target.value; if (id) updateRoutine(ri, r => { r.ex.push({ id, sets: 3, mode: 'reps', reps: 10, weight: 0 }) }); e.target.value = '' }}>
+        <option value="">+ Add exercise…</option>
+        {[...(plan.customEx || []), ...EXDB].map(ex => <option key={ex.id} value={ex.id}>{ex.n}</option>)}
+      </select>
+    </div>)}
+    <div className="row" style={{ gap: 8, marginTop: 10 }}><Button onClick={addRoutine} icon="plus">Routine</Button><Button onClick={addCustom} icon="plus">Custom exercise</Button></div>
+    <div className="row" style={{ gap: 8, marginTop: 14 }}><Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save trainer plan'}</Button><Button onClick={onCancel}>Cancel</Button></div>
+  </div>
+}
+
+function performanceRows(workouts) {
+  const best = new Map()
+  for (const workout of workouts) for (const entry of workout.entries || []) for (const set of entry.sets || []) {
+    if (!set.done) continue
+    const estimate = estimate1RM(set.w, set.r)
+    const current = best.get(entry.id)
+    if (estimate && (!current || estimate > current.estimate)) best.set(entry.id, { id: entry.id, estimate, weight: +set.w || 0, reps: +set.r || 0, date: workout.d })
+  }
+  return [...best.values()].sort((a, b) => b.estimate - a.estimate).slice(0, 12)
+}
+
 function UserDetail({ id, onChanged, close }) {
   const [d, setD] = useState(null)
+  const [editing, setEditing] = useState(false)
   const toast = useUI(s => s.toast)
-  useEffect(() => { api('/api/admin/user?id=' + encodeURIComponent(id)).then(setD).catch(e => toast(e.message)) }, [id])
+  const load = () => api('/api/admin/user?id=' + encodeURIComponent(id)).then(setD).catch(e => toast(e.message))
+  useEffect(() => { load() }, [id])
   if (!d) return <div className="muted small">Loading…</div>
+  if (editing) return <TrainerPlanEditor detail={d} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); load(); onChanged() }} />
   const u = d.user
   const setDisabled = disabled => {
     api('/api/admin/user/disable', { method: 'POST', body: JSON.stringify({ id: u.id, disabled }) })
       .then(() => { toast(disabled ? 'User disabled' : 'User enabled'); onChanged(); close() })
       .catch(e => toast(e.message))
   }
+  const setRole = role => api('/api/admin/user/role', { method: 'POST', body: JSON.stringify({ id: u.id, role }) })
+    .then(() => { toast(role === 'trainer' ? 'Trainer access granted' : 'Trainer access removed'); onChanged(); load() }).catch(e => toast(e.message))
+  const weightPoints = d.bodyweight.map(x => ({ t: new Date(x.d + 'T12:00:00').getTime(), d: x.d, y: +x.w }))
+  const performance = performanceRows(d.workouts)
   return <>
     <h3 className="capitalize">{u.name}</h3>
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '8px 0 12px' }}>
-      {u.admin && <span className="tag acc">admin</span>}
+      {u.admin && <span className="tag acc">trainer</span>}
       {u.disabled && <span className="tag" style={{ color: 'var(--red)' }}>disabled</span>}
       {u.invitedBy && <span className="tag">invite {u.invitedBy}</span>}
       <span className="tag">joined {u.created ? fmtDate(u.created.slice(0, 10)) : '—'}</span>
+    </div>
+    {!u.admin && <Button variant="primary" onClick={() => setEditing(true)} icon="pencil">Edit client plan</Button>}
+    <div className="row" style={{ gap: 8, marginTop: 8 }}>
+      {!u.admin && <Button size="sm" onClick={() => setRole('trainer')}>Promote to trainer</Button>}
+      {u.admin && <Button size="sm" variant="danger" onClick={() => setRole('client')}>Demote to client</Button>}
     </div>
     <div className="tiles" style={{ textAlign: 'left' }}>
       <div className="tile"><div className="l">Workouts</div><div className="v" style={{ fontSize: '1.1rem' }}>{d.workouts.length}</div></div>
@@ -52,6 +132,15 @@ function UserDetail({ id, onChanged, close }) {
       onClick={() => u.disabled ? setDisabled(false)
         : confirmSheet({ title: 'Disable ' + u.name + '?', message: 'They are signed out everywhere and can no longer sync or log in until re-enabled.', confirmText: 'Disable', danger: true, onConfirm: () => setDisabled(true) })}>
       {u.disabled ? 'Enable account' : 'Disable account'}</button>}
+    <h4 className="sec">Body-weight progress</h4>
+    <div className="card"><LineChart points={weightPoints} unit={d.unit} goal={null} /></div>
+    <h4 className="sec">Exercise performance</h4>
+    {performance.length ? <div className="list">{performance.map(p => <div className="item" key={p.id}>
+      <div className="grow"><div className="tt capitalize">{EXIDX[p.id]?.n || p.id}</div><div className="ss">{p.weight} {d.unit} × {p.reps} · {fmtDate(p.date, true)}</div></div>
+      <span className="tag acc">e1RM {fmtNum(p.estimate)} {d.unit}</span>
+    </div>)}</div> : <div className="empty small">No eligible completed sets yet.</div>}
+    <h4 className="sec">Current plan</h4>
+    {d.routines.length ? <div className="list">{d.routines.map(r => <div className="item" key={r.id}><div className="grow"><div className="tt">{r.name}</div><div className="ss">{(r.ex || []).length} exercises</div></div></div>)}</div> : <div className="empty small">No routines yet.</div>}
     <h4 className="sec">Workout history</h4>
     {d.workouts.length ? <div className="list" style={{ gap: 0 }}>
       {d.workouts.slice(0, 60).map(w => <div key={w.id} className="row between" style={{ padding: '9px 2px', borderBottom: '1px solid var(--sep)' }}>
@@ -111,7 +200,7 @@ export default function Admin() {
   return <div className="narrow">
     <div className="hdr">
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button>
-      <div style={{ flex: 1, marginLeft: 8 }}><h1 style={{ margin: 0 }}>Admin</h1>
+      <div style={{ flex: 1, marginLeft: 8 }}><h1 style={{ margin: 0 }}>Trainer dashboard</h1>
         <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
       <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
     </div>
@@ -137,7 +226,7 @@ export default function Admin() {
     <h4 className="sec">Users</h4>
     <div className="list">
       {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
-        <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>admin</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
+          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>trainer</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
           <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · synced ' + rel(u.lastSync)}</div></div>
         {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
       </div>)}
