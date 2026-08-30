@@ -198,6 +198,11 @@ h4.sec{
 .row{display:flex;align-items:center;gap:12px}
 .row.between{justify-content:space-between}
 
+.login-logo{
+  display:block;width:min(220px,58vw);height:auto;margin:0 auto 10px;
+  border-radius:22px;object-fit:contain;
+}
+
 /* ----------------------------------------------------------------- card -- */
 .card{
   background:var(--surface);border-radius:var(--r-card);

@@ -37,14 +37,17 @@ export default function Plan() {
     </div><div>
       <div className="row between" style={{ marginTop: 22, marginBottom: 10 }}>
         <h4 className="sec" style={{ margin: 0 }}>{t('Routines')}</h4>
-        <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New')}</Button>
+        <div className="row" style={{ gap: 8 }}>
+          <Button size="sm" variant="tinted" icon="sparkles" onClick={loadStarterPlan}>{t('Programs')}</Button>
+          <Button size="sm" variant="tinted" icon="plus" onClick={addRoutine}>{t('New')}</Button>
+        </div>
       </div>
       {S.routines.length ? <div className="list">{S.routines.map(r => <div key={r.id} className="item" onClick={() => nav('/plan/r/' + r.id)}>
         <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
         <div className="grow"><div className="tt">{r.name}</div><div className="ss">{exCount(r.ex.length)}</div></div>
         <Icon name="chevronRight" className="chev" /></div>)}</div> : <>
         <div className="empty"><div className="ico"><Icon name="clipboard" /></div>{t('No routines yet.')}<br />{t('Create one or load the starter plan.')}</div>
-        <Button icon="sparkles" onClick={loadStarterPlan}>{t('Load starter plan (Push / Pull / Legs)')}</Button>
+        <Button icon="sparkles" onClick={loadStarterPlan}>{t('Choose a workout program')}</Button>
       </>}
     </div></div>
   </>

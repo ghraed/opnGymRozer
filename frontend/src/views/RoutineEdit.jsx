@@ -94,7 +94,13 @@ export default function RoutineEdit() {
     })()}
 
     <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="link" style={{ fontSize: 13 }} />{t('Tap the link button on an exercise to superset it with the one above — you’ll do them back-to-back.')}</div>
-    <Button variant="primary" onClick={() => exercisePicker(ex => exConfigSheet(ex, null, cfg => edit(x => { x.push({ id: ex.id, ...cfg }) }), null, r))} icon="plus">{t('Add exercise')}</Button>
+    {r.exerciseFilter && <div className="small dim" style={{ margin: '12px 2px 8px' }}>
+      {t('Exercise suggestions are filtered for {0}. You can expand the picker to add anything else.', t(r.exerciseFilter.label))}
+    </div>}
+    <Button variant="primary" onClick={() => exercisePicker(
+      ex => exConfigSheet(ex, null, cfg => edit(x => { x.push({ id: ex.id, ...cfg }) }), null, r),
+      { filter: r.exerciseFilter }
+    )} icon="plus">{t('Add exercise')}</Button>
     <div style={{ height: 10 }} />
     <Button variant="danger" onClick={() => confirmSheet({
       title: t('Delete routine?'), message: t('“{0}” and its exercises will be removed.', r.name), confirmText: t('Delete'), danger: true,

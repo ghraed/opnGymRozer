@@ -4,7 +4,6 @@ import { passwordLogin, passwordRegister, api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
-import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
 function RegisterSheet({ close }) {
@@ -44,7 +43,7 @@ export default function Login() {
     try { const u = await passwordLogin(email.trim(), password); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { useUI.getState().toast(e.message || t('Sign-in failed')) } finally { setBusy(false) }
   }
-  const head = <><div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc)' }}><Icon name="dumbbell" /></div><h1 style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-.028em', margin: '10px 0 4px' }}>ROZER</h1></>
+  const head = <img className="login-logo" src="/rozer-logo.png" alt="ROZER" width="800" height="800" />
   const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
   if (DEMO) return <div className="narrow" style={wrap}>{head}<div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div><Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button></div>
   return <div className="narrow" style={wrap}>

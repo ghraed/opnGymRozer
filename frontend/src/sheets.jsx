@@ -7,7 +7,7 @@ import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolu
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
-import { starterRoutines } from './lib/starter.js'
+import { PROGRAMS, buildProgram, exerciseMatchesFilter } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
 import Stepper from './components/Stepper.jsx'
 import Icon from './components/Icon.jsx'
@@ -42,15 +42,64 @@ export function confirmSheet(opts) {
   ui().openSheet(close => <ConfirmDialog {...opts} close={close} />, { kind: 'center' })
 }
 
-/* ============================ starter plan ============================ */
-export function loadStarterPlan() {
-  const [push, pull, legs] = starterRoutines()
-  update(st => {
-    st.routines.push(push, pull, legs)
-    st.week[1] = push.id; st.week[3] = pull.id; st.week[5] = legs.id
-  })
-  toast(t('Starter plan loaded — Mon Push · Wed Pull · Fri Legs'))
+/* ============================ workout program builder ============================ */
+const PROGRAM_ICONS = { ppl: 'barbell', upper_lower: 'figureStrength', full_body: 'dumbbell', bro_split: 'arm' }
+
+function ProgramBuilder({ close }) {
+  const st = useStore(s => s.S)
+  const [selected, setSelected] = useState(null)
+
+  const install = empty => {
+    const built = buildProgram(selected.id, { empty })
+    update(s => {
+      s.routines.push(...built.routines)
+      // Choosing a program makes its schedule the active week. Existing routines remain
+      // available, but stale day assignments cannot accidentally mix two programs.
+      s.week = built.week
+    })
+    close()
+    toast(t(empty ? 'Custom {0} schedule created' : '{0} program loaded', selected.name))
+    if (empty) nav('/plan/r/' + built.routines[0].id)
+  }
+
+  if (!selected) return <>
+    <h3>{t('Choose your workout program')}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Pick the weekly split that fits how often you want to train.')}</div>
+    <div className="list">
+      {PROGRAMS.map(p => <div key={p.id} className="item" onClick={() => setSelected(p)}>
+        <span className="lrow-i"><Icon name={PROGRAM_ICONS[p.id]} /></span>
+        <div className="grow"><div className="tt">{t(p.name)}</div><div className="ss">{t(p.summary)}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>)}
+    </div>
+    {!!st.routines.length && <div className="small dim" style={{ marginTop: 10 }}>{t('Your existing routines will stay saved; the selected program will replace the current weekly schedule.')}</div>}
+  </>
+
+  return <>
+    <div className="row" style={{ marginBottom: 4 }}>
+      <button className="iconbtn" onClick={() => setSelected(null)} aria-label={t('Back')}><Icon name="chevronLeft" /></button>
+      <h3 style={{ margin: 0 }}>{t(selected.name)}</h3>
+    </div>
+    <div className="muted small" style={{ margin: '0 0 14px 48px' }}>{t(selected.summary)}</div>
+    <h4 className="sec" style={{ marginTop: 0 }}>{t('How do you want to start?')}</h4>
+    <div className="list">
+      <div className="item" onClick={() => install(false)}>
+        <span className="lrow-i"><Icon name="sparkles" /></span>
+        <div className="grow"><div className="tt">{t('Use the default program')}</div><div className="ss">{t('Balanced exercises, sets and reps are ready for you')}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>
+      <div className="item" onClick={() => install(true)}>
+        <span className="lrow-i"><Icon name="plus" /></span>
+        <div className="grow"><div className="tt">{t('Create my own workouts')}</div><div className="ss">{t('Start empty with exercises filtered for each training day')}</div></div>
+        <Icon name="chevronRight" className="chev" />
+      </div>
+    </div>
+  </>
 }
+
+export const workoutProgramSheet = () => ui().openSheet(close => <ProgramBuilder close={close} />)
+// Compatibility name used by Home and Settings.
+export const loadStarterPlan = workoutProgramSheet
 
 /* ============================ weight picker (shared: body weight + goal) ============================ */
 // Fixed range, not a moving window — a window that resizes itself mid-drag (the previous
@@ -408,16 +457,18 @@ function usageMap(st) {
   st.workouts.forEach(w => w.entries.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
   return u
 }
-function ExercisePicker({ onPick, close }) {
+function ExercisePicker({ onPick, close, filter }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
   const [bp, setBp] = useState('')          // '' = all, '★' = chosen, else a body part
   const [eq, setEq] = useState('')          // '' = any equipment
   const [shown, setShown] = useState(50)
+  const [expanded, setExpanded] = useState(!filter)
   const ql = q.toLowerCase().trim()
   const all = allExercises(st)
-  let base = all.filter(e =>
+  const scope = expanded ? all : all.filter(e => exerciseMatchesFilter(e, filter))
+  let base = scope.filter(e =>
     (bp === '★' ? usage[e.id] : (!bp || e.bp === bp)) &&
     (!ql || e.n.toLowerCase().includes(ql) || e.tg.includes(ql) || e.eq.includes(ql) || (e.desc || '').toLowerCase().includes(ql)))
   if (bp === '★') base = [...base].sort((a, b) => (usage[b.id] - usage[a.id]) || (a.n < b.n ? -1 : 1))
@@ -425,22 +476,24 @@ function ExercisePicker({ onPick, close }) {
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
-  const chosenCount = Object.keys(usage).length
+  const chosenCount = scope.filter(e => usage[e.id]).length
+  const bodyParts = BODYPARTS.filter(part => scope.some(e => e.bp === part))
   return <>
     <h3>{t('Add exercise')}</h3>
+    {filter && !expanded && <div className="small muted" style={{ marginBottom: 10 }}>{t('Showing exercises related to {0}.', t(filter.label))}</div>}
     <div className="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
-      <input className="input" placeholder={t('Search {0} exercises…', all.length)} value={q} onChange={e => { setQ(e.target.value); setShown(50) }} /></div>
+      <input className="input" placeholder={t('Search {0} exercises…', scope.length)} value={q} onChange={e => { setQ(e.target.value); setShown(50) }} /></div>
     <div className="chips" style={{ margin: eqOpts.length > 1 ? '10px 0 6px' : '10px 0' }}>
       {chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setEq(''); setShown(50) }}>{t('All')}</button>
-      {BODYPARTS.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(50) }}>{t(b)}</button>)}
+      {bodyParts.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(50) }}>{t(b)}</button>)}
     </div>
     {eqOpts.length > 1 && <div className="chips" style={{ marginBottom: 10 }}>
       <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(50) }}>{t('Any equipment')}</button>
       {eqOpts.map(x => <button key={x} className={'chip' + (eqOn === x ? ' on' : '')} onClick={() => { setEq(x); setShown(50) }}>{t(x)}</button>)}
     </div>}
     <div className="list">
-      {bp !== '★' && <div className="item" onClick={() => customExSheet(null, ex => onPick(ex), q.trim())}>
+      {expanded && bp !== '★' && <div className="item" onClick={() => customExSheet(null, ex => onPick(ex), q.trim())}>
         <div className="thumb thumb-x"><Icon name="sparkles" /></div>
         <div className="grow"><div className="tt">{t('Create your own exercise')}</div><div className="ss">{t('name + body part, no animation')}</div></div><Icon name="plus" className="chev" />
       </div>}
@@ -451,9 +504,10 @@ function ExercisePicker({ onPick, close }) {
       {f.length === 0 && bp === '★' && <div className="empty">{t('Nothing chosen yet — add exercises and they’ll show up here.')}</div>}
     </div>
     {f.length > shown && <><div style={{ height: 8 }} /><Button onClick={() => setShown(s => s + 50)}>{t('Show more')}</Button></>}
+    {filter && !expanded && <><div style={{ height: 8 }} /><Button variant="tinted" icon="plus" onClick={() => { setExpanded(true); setBp(''); setEq(''); setShown(50) }}>{t('Expand to all exercises')}</Button></>}
   </>
 }
-export const exercisePicker = onPick => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} />)
+export const exercisePicker = (onPick, options = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} filter={options.filter} />)
 
 /* ============================ exercise config ============================ */
 // Progression settings for one exercise (issue #17). Shown inside the config sheet because
