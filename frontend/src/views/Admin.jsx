@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
@@ -12,7 +11,7 @@ import LineChart from '../components/LineChart.jsx'
 import { EXDB, EXIDX } from '../lib/exercises.js'
 import { estimate1RM } from '../lib/onerm.js'
 
-// Admin-only operator dashboard (owner passkey + admin flag; guarded again server-side).
+// Admin-only operator dashboard (owner session + admin flag; guarded again server-side).
 // Deliberately English-only — it isn't part of the translated end-user surface, so it stays
 // out of the per-language string packs.
 
@@ -178,13 +177,13 @@ function InvitesCard({ invites, reload }) {
 }
 
 export default function Admin() {
-  const nav = useNavigate()
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
   const openSheet = useUI(s => s.openSheet)
   const [users, setUsers] = useState(null)
   const [invites, setInvites] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
+  const [search, setSearch] = useState('')
 
   const loadUsers = () => api('/api/admin/users').then(d => { setUsers(d.users); setInviteOnly(d.invite_only) }).catch(e => toast(e.message || 'Failed to load'))
   const loadInvites = () => api('/api/admin/invites').then(d => setInvites(d.invites)).catch(() => {})
@@ -196,11 +195,11 @@ export default function Admin() {
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const disabledCount = (users || []).filter(u => u.disabled).length
+  const visibleUsers = (users || []).filter(u => u.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
 
   return <div className="narrow">
-    <div className="hdr">
-      <button className="iconbtn" onClick={() => nav('/settings')} aria-label="Back"><Icon name="chevronLeft" /></button>
-      <div style={{ flex: 1, marginLeft: 8 }}><h1 style={{ margin: 0 }}>Trainer dashboard</h1>
+    <div className="hdr admin-hdr">
+      <div className="admin-title"><h1>Trainer dashboard</h1>
         <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
       <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
     </div>
@@ -223,14 +222,20 @@ export default function Admin() {
 
     <InvitesCard invites={invites} reload={loadInvites} />
 
-    <h4 className="sec">Users</h4>
+    <h4 className="sec">Clients</h4>
+    <div className="admin-search">
+      <Icon name="magnifier" />
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search clients" aria-label="Search clients" />
+      {search && <button onClick={() => setSearch('')} aria-label="Clear search"><Icon name="xmark" /></button>}
+    </div>
     <div className="list">
-      {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
+      {visibleUsers.map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
           <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>trainer</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
           <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · synced ' + rel(u.lastSync)}</div></div>
         {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
       </div>)}
       {users && !users.length && <div className="empty">No users yet.</div>}
+      {users && users.length > 0 && !visibleUsers.length && <div className="empty small">No matching clients.</div>}
     </div>
   </div>
 }
