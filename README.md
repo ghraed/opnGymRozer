@@ -91,14 +91,11 @@ You need [Docker](https://docs.docker.com/get-docker/) with Compose.
 git clone https://github.com/DuarteSantos8/openGym
 cd openGym
 cp .env.example .env
-docker compose pull   # grab prebuilt images (amd64 + arm64) — skip to build from source instead
-docker compose up -d
+docker compose up -d --build
 ```
 
 Open **http://localhost:8080**, tap **Create profile**, and you're in. First launch downloads
-the exercise media (~140 MB) once. Prefer building the images yourself instead of pulling from
-`ghcr.io`? Drop the `pull` step and run `docker compose up -d --build` — you don't need Node or
-a build step locally either way.
+the exercise media (~140 MB) once. MySQL migrations run automatically before the API starts.
 
 > Want it reachable from your phone over the internet with passkeys? You'll need an HTTPS
 > domain — a two-line change in `.env`. See **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
@@ -127,20 +124,25 @@ mobile app is the install-and-done flavor.
                                                         ▼
                                         ┌──────────────────────────┐
                                         │  api  (Node + WebAuthn)  │
-                                        │   └─ ./data (JSON files) │
+                                        │   └─ MySQL 8.4            │
                                         └──────────────────────────┘
 ```
 
 - **frontend/** — React + Vite (React Router + Zustand), built to static files **inside Docker**
-- **api/** — Node with no framework, one dependency (`@simplewebauthn/server`), storing everything as plain JSON files under `./data`
+- **api/** — Node with no framework, WebAuthn/passkeys, and MySQL persistence
 - **web/** — a multi-stage image that builds the frontend and serves it with nginx, proxying `/api` to the backend so it's all on **one origin** (passkeys require this)
 
 ## Your data
 
-Lives in `./data` on your host: `db.json` (profiles + public passkeys), `state-<user>.json`
-(each user's plan, workouts, body weight, settings), and `secret` (the session-cookie key).
-**Back up `./data` and you've backed up everything.** Passkey private keys never touch the
-server — they stay in your phone's secure hardware / your password manager.
+Lives in MySQL. Accounts, passkeys, invitations and subscriptions are relational; client settings,
+plans and progress are isolated, versioned JSON documents. Back up the `mysql_data` volume (or use
+`mysqldump`) to back up the application. Passkey private keys never touch the server.
+
+Existing JSON installations can be imported once, without changing their source files:
+
+```bash
+docker compose --profile tools run --rm import-json
+```
 
 ## Configuration
 
@@ -152,10 +154,12 @@ All via `.env` (see `.env.example`):
 | `ORIGIN`      | Full URL the app is served from                      | `http://localhost:8080` |
 | `WEB_PORT`    | Host port for the web UI                             | `8080`                  |
 | `RP_NAME`     | Name shown in the passkey prompt                     | `openGym`               |
-| `ADMIN_UIDS`  | User ids that get the admin dashboard (comma-separated) | *(none)*             |
 | `INVITE_ONLY` | Require an invite code to create a profile           | *(off)*                 |
+| `DB_HOST` / `DB_PORT` | External MySQL connection (local development) | `127.0.0.1:3306`     |
+| `DB_NAME` / `DB_USER` / `DB_PASSWORD` | MySQL database credentials | `opengym`            |
 
-Push notification keys are generated on first run and saved to `./data/vapid.json` — nothing to set.
+Push notification keys and the session signing secret are generated on first run and stored in MySQL.
+To make a registered profile a trainer, run `UPDATE users SET role='trainer' WHERE id='USER_ID';`.
 
 ## Roadmap
 
@@ -176,8 +180,7 @@ Rough, community-driven — ideas and PRs welcome:
 
 React 19 + Vite (React Router, Zustand) · Node (no framework) · nginx · Docker Compose ·
 WebAuthn · exercise data from [hasaneyldrm/exercises-dataset](https://github.com/hasaneyldrm/exercises-dataset).
-No database server, no cloud dependencies — the frontend builds inside Docker, so self-hosting
-stays a one-command `docker compose up`.
+MySQL 8.4 runs in Docker by default; an external MySQL server can be selected through `.env`.
 
 The training logic — progression rules, 1RM estimation, how a logged session is read back —
 lives in pure functions under `frontend/src/lib/` with tests next to them: `npm test` in

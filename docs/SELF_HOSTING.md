@@ -93,30 +93,32 @@ default: open signup, no admin.
 If you'd rather control who gets in, two optional settings in `.env` turn that around:
 
 ```bash
-ADMIN_UIDS=youruserid      # comma-separated; these users get the admin dashboard
 INVITE_ONLY=1              # new profiles need an invite code
 ```
 
-Register your own passkey profile first, then find your id in `./data/db.json` under `users[].id`
-and put it in `ADMIN_UIDS`. You'll get an **Admin dashboard** link in Settings: who's training
-right now, each user's workout history and body weight, the ability to disable an account (signed
-out and locked out everywhere until you re-enable it), and — with `INVITE_ONLY=1` — generating and
-revoking invite codes. Existing accounts keep working when you switch invite-only on. Admin access
-is gated by your passkey and enforced server-side, so it needs no separate login.
+Register your trainer with a passkey, then promote that profile in MySQL:
+
+```sql
+UPDATE users SET role='trainer' WHERE id='USER_ID';
+```
+
+The **Trainer dashboard** can monitor every client, edit plans and custom exercises, review full
+progress, manage invites, disable client accounts, and promote more trainers. Access is gated by
+the trainer's passkey and enforced server-side.
 
 Prefer to keep the whole thing off the open internet? A VPN or an auth proxy (Authelia, Cloudflare
 Access…) in front still works, and composes with the above.
 
 ## 5. Backups
 
-Everything is in `./data`:
+All persistent data is in MySQL. Back up the Docker database with:
 
 ```bash
-tar czf opengym-backup-$(date +%F).tar.gz data/
+docker compose exec -T mysql mysqldump -uroot -p"$DB_ROOT_PASSWORD" --single-transaction opengym > opengym-backup.sql
 ```
 
-That archive contains all profiles, passkeys and workout history. Restore by unpacking it back
-into the project folder. (Individual users can also export their own data as JSON from Settings.)
+The dump contains profiles, passkeys, trainer roles and workout history. The legacy `./data` files
+remain untouched after a JSON migration and can be retained as an additional migration backup.
 
 ## 6. Notifications
 
@@ -126,7 +128,7 @@ Turn it on per-profile in **Settings → Notifications** (requires a signed-in p
 HTTPS — see section 3).
 
 No setup needed server-side, and nothing to configure per timezone: VAPID keys are generated on
-first run and saved to `./data/vapid.json`, and each user's browser reports its own timezone
+first run and saved in MySQL, and each user's browser reports its own timezone
 automatically when they turn the reminder on — it fires at their local time, and follows them if
 they travel, regardless of what timezone the server itself runs in.
 
@@ -152,7 +154,7 @@ git pull
 docker compose up -d --build
 ```
 
-The app shell is versioned (`?v=N`) so clients pick up changes on next load. Your `./data` and the
+The app shell is versioned (`?v=N`) so clients pick up changes on next load. Your MySQL volume and the
 downloaded media are untouched.
 
 ## Troubleshooting

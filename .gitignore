@@ -1,0 +1,6 @@
+.env
+api/node_modules/
+frontend/node_modules/
+frontend/dist/
+data/state-*.json
+npm-debug.log*
