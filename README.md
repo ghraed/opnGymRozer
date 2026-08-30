@@ -129,12 +129,12 @@ mobile app is the install-and-done flavor.
 ```
 
 - **frontend/** — React + Vite (React Router + Zustand), built to static files **inside Docker**
-- **api/** — Node with no framework, WebAuthn/passkeys, and MySQL persistence
-- **web/** — a multi-stage image that builds the frontend and serves it with nginx, proxying `/api` to the backend so it's all on **one origin** (passkeys require this)
+- **api/** — Node with no framework, email/password authentication, and MySQL persistence
+- **web/** — a multi-stage image that builds the frontend and serves it with nginx, proxying `/api` to the backend so it is all on one origin
 
 ## Your data
 
-Lives in MySQL. Accounts, passkeys, invitations and subscriptions are relational; client settings,
+Lives in MySQL. Accounts, invitations and subscriptions are relational; client settings,
 plans and progress are isolated, versioned JSON documents. Back up the `mysql_data` volume (or use
 `mysqldump`) to back up the application. Passkey private keys never touch the server.
 
@@ -150,10 +150,8 @@ All via `.env` (see `.env.example`):
 
 | Variable      | What it is                                           | Default                 |
 |---------------|------------------------------------------------------|-------------------------|
-| `RP_ID`       | Hostname passkeys are bound to                       | `localhost`             |
 | `ORIGIN`      | Full URL the app is served from                      | `http://localhost:8080` |
 | `WEB_PORT`    | Host port for the web UI                             | `8080`                  |
-| `RP_NAME`     | Name shown in the passkey prompt                     | `openGym`               |
 | `INVITE_ONLY` | Require an invite code to create a profile           | *(off)*                 |
 | `DB_HOST` / `DB_PORT` | External MySQL connection (local development) | `127.0.0.1:3306`     |
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | MySQL database credentials | `opengym`            |

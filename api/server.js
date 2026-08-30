@@ -1,12 +1,11 @@
 import http from 'node:http'
 import crypto from 'node:crypto'
-import { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server'
 import webpush from 'web-push'
-import { createPool, createUser, getCredential, getUser, migrate, readClientState, saveClientState, saveTrainerPlan, setting } from './db.js'
+import { createPool, createPasswordUser, getUser, getUserByEmail, hashPassword, migrate, readClientState, saveClientState, saveTrainerPlan, setting } from './db.js'
 import { parseJson } from './state.js'
 
-const PORT = +(process.env.PORT || 3000), RP_ID = process.env.RP_ID || 'localhost'
-const ORIGIN = process.env.ORIGIN || 'http://localhost:8080', RP_NAME = process.env.RP_NAME || 'ROZER'
+const PORT = +(process.env.PORT || 3000)
+const ORIGIN = process.env.ORIGIN || 'http://localhost:8080'
 const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '')
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90), MAX_BODY = 5 * 1024 * 1024
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : ''
@@ -39,10 +38,15 @@ async function readSession(req) {
 async function requireUser(req, res) { const u = await readSession(req); if (!u) json(res, 401, { error: 'not signed in' }); return u }
 async function requireTrainer(req, res) { const u = await requireUser(req, res); if (u && u.role !== 'trainer') { json(res, 403, { error: 'trainer access required' }); return null } return u }
 
-const challenges = new Map()
-function putChallenge(data) { const cid = crypto.randomBytes(16).toString('base64url'); challenges.set(cid, { ...data, expires: Date.now() + 300000 }); return cid }
-function takeChallenge(cid) { const c = challenges.get(cid); challenges.delete(cid); return c?.expires >= Date.now() ? c : null }
-setInterval(() => { for (const [k, v] of challenges) if (v.expires < Date.now()) challenges.delete(k) }, 60000).unref()
+const emailOf = value => String(value || '').trim().toLowerCase()
+const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254
+function passwordMatches(password, encoded) {
+  const [scheme, salt, expected] = String(encoded || '').split('$')
+  if (scheme !== 'scrypt' || !salt || !expected) return false
+  const actual = crypto.scryptSync(password, Buffer.from(salt, 'base64url'), 64)
+  const target = Buffer.from(expected, 'base64url')
+  return target.length === actual.length && crypto.timingSafeEqual(actual, target)
+}
 
 function json(res, code, value, headers = {}) { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...headers }); res.end(JSON.stringify(value)) }
 function readBody(req) {
@@ -86,30 +90,21 @@ const routes = {
   'GET /api/health': async (req, res) => { const [[c]] = await pool.query('SELECT COUNT(*) users FROM users'); json(res, 200, { ok: true, database: 'mysql', users: Number(c.users) }) },
   'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY }),
   'GET /api/me': async (req, res) => { const u = await requireUser(req, res); if (u) json(res, 200, { user: publicUser(u) }) },
-  'POST /api/register/options': async (req, res) => {
-    const b = await readBody(req), name = String(b.name || '').trim().slice(0, 40), code = String(b.code || '').trim().toUpperCase()
+  'POST /api/auth/register': async (req, res) => {
+    const b = await readBody(req), name = String(b.name || '').trim().slice(0, 40), email = emailOf(b.email), password = String(b.password || ''), code = String(b.code || '').trim().toUpperCase()
     if (!name) return json(res, 400, { error: 'name required' }); if (INVITE_ONLY && !(await inviteIsOpen(code))) return json(res, 403, { error: 'a valid invite code is required' })
-    const uid = crypto.randomBytes(12).toString('base64url')
-    const options = await generateRegistrationOptions({ rpName: RP_NAME, rpID: RP_ID, userID: Buffer.from(uid), userName: name, userDisplayName: name, attestationType: 'none', authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' }, excludeCredentials: [] })
-    json(res, 200, { cid: putChallenge({ challenge: options.challenge, name, uid, code }), options })
-  },
-  'POST /api/register/verify': async (req, res) => {
-    const b = await readBody(req), c = takeChallenge(b.cid); if (!c?.uid) return json(res, 400, { error: 'challenge expired — try again' })
-    let v; try { v = await verifyRegistrationResponse({ response: b.credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID, requireUserVerification: false }) } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }) }
-    if (!v.verified) return json(res, 400, { error: 'not verified' })
-    const cred = v.registrationInfo.credential; if (await getCredential(pool, cred.id)) return json(res, 409, { error: 'credential already registered' })
-    const u = { id: c.uid, name: c.name, created: new Date() }
-    await createUser(pool, u, { id: cred.id, publicKey: Buffer.from(cred.publicKey).toString('base64url'), counter: cred.counter, transports: b.credential?.response?.transports || [] }, INVITE_ONLY ? c.code : null)
+    if (!validEmail(email)) return json(res, 400, { error: 'valid email required' })
+    if (password.length < 8 || password.length > 200) return json(res, 400, { error: 'password must be 8–200 characters' })
+    if (await getUserByEmail(pool, email)) return json(res, 409, { error: 'an account already exists for this email' })
+    const u = { id: crypto.randomBytes(12).toString('base64url'), name, email, passwordHash: hashPassword(password), created: new Date() }
+    await createPasswordUser(pool, u, INVITE_ONLY ? code : null)
     const stored = await getUser(pool, u.id); json(res, 200, { user: publicUser(stored) }, { 'Set-Cookie': sessionCookie(stored) })
   },
-  'POST /api/login/options': async (req, res) => { const options = await generateAuthenticationOptions({ rpID: RP_ID, userVerification: 'preferred', allowCredentials: [] }); json(res, 200, { cid: putChallenge({ challenge: options.challenge }), options }) },
-  'POST /api/login/verify': async (req, res) => {
-    const b = await readBody(req), c = takeChallenge(b.cid); if (!c) return json(res, 400, { error: 'challenge expired — try again' })
-    const cred = await getCredential(pool, b.credential?.id); if (!cred) return json(res, 404, { error: 'unknown passkey — create a profile first' })
-    let v; try { v = await verifyAuthenticationResponse({ response: b.credential, expectedChallenge: c.challenge, expectedOrigin: ORIGIN, expectedRPID: RP_ID, requireUserVerification: false, credential: { id: cred.credential_id, publicKey: Buffer.from(cred.public_key, 'base64url'), counter: Number(cred.counter), transports: parseJson(cred.transports, []) } }) } catch (e) { return json(res, 400, { error: 'verification failed: ' + e.message }) }
-    if (!v.verified) return json(res, 400, { error: 'not verified' })
-    await pool.execute('UPDATE passkey_credentials SET counter=? WHERE credential_id=?', [v.authenticationInfo.newCounter, cred.credential_id])
-    const u = await getUser(pool, cred.user_id); if (!u) return json(res, 500, { error: 'user missing' }); if (u.disabled) return json(res, 403, { error: 'this account has been disabled' })
+  'POST /api/auth/login': async (req, res) => {
+    const b = await readBody(req), email = emailOf(b.email), password = String(b.password || '')
+    const u = await getUserByEmail(pool, email)
+    if (!u || !passwordMatches(password, u.password_hash)) return json(res, 401, { error: 'invalid email or password' })
+    if (u.disabled) return json(res, 403, { error: 'this account has been disabled' })
     json(res, 200, { user: publicUser(u) }, { 'Set-Cookie': sessionCookie(u) })
   },
   'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
@@ -147,6 +142,6 @@ const routes = {
 }
 
 const server = http.createServer(async (req, res) => { const url = new URL(req.url, 'http://x'), handler = routes[`${req.method} ${url.pathname}`]; if (!handler) return json(res, 404, { error: 'not found' }); try { await handler(req, res) } catch (e) { console.error(req.method, url.pathname, e); if (!res.headersSent) json(res, e.status || 500, { error: e.message || 'server error', currentVersion: e.currentVersion }) } })
-server.listen(PORT, () => console.log(`gym-api on :${PORT} (mysql, rpID=${RP_ID}, origin=${ORIGIN})`))
+server.listen(PORT, () => console.log(`gym-api on :${PORT} (mysql, origin=${ORIGIN})`))
 async function shutdown() { server.close(); await pool.end(); process.exit(0) }
 process.on('SIGINT', shutdown); process.on('SIGTERM', shutdown)

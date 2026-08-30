@@ -96,7 +96,7 @@ If you'd rather control who gets in, two optional settings in `.env` turn that a
 INVITE_ONLY=1              # new profiles need an invite code
 ```
 
-Register your trainer with a passkey, then promote that profile in MySQL:
+Register your trainer with an email and password, then promote that profile in MySQL:
 
 ```sql
 UPDATE users SET role='trainer' WHERE id='USER_ID';
@@ -104,7 +104,7 @@ UPDATE users SET role='trainer' WHERE id='USER_ID';
 
 The **Trainer dashboard** can monitor every client, edit plans and custom exercises, review full
 progress, manage invites, disable client accounts, and promote more trainers. Access is gated by
-the trainer's passkey and enforced server-side.
+the trainer's signed-in session and enforced server-side.
 
 Prefer to keep the whole thing off the open internet? A VPN or an auth proxy (Authelia, Cloudflare
 Access…) in front still works, and composes with the above.

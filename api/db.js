@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import mysql from 'mysql2/promise'
+import crypto from 'node:crypto'
 import { joinState, mergeProgress, parseJson, sameJson, splitState } from './state.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -59,12 +60,17 @@ export async function getUser(pool, id) {
   return rows[0] || null
 }
 
-export async function getCredential(pool, id) {
-  const [rows] = await pool.execute('SELECT * FROM passkey_credentials WHERE credential_id=?', [id])
+export async function getUserByEmail(pool, email) {
+  const [rows] = await pool.execute('SELECT * FROM users WHERE email=?', [email])
   return rows[0] || null
 }
 
-export async function createUser(pool, user, credential, inviteCode = null) {
+export function hashPassword(password, salt = crypto.randomBytes(16)) {
+  const derived = crypto.scryptSync(password, salt, 64)
+  return `scrypt$${salt.toString('base64url')}$${derived.toString('base64url')}`
+}
+
+export async function createPasswordUser(pool, user, inviteCode = null) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
@@ -74,8 +80,7 @@ export async function createUser(pool, user, credential, inviteCode = null) {
       invite = rows[0]
       if (!invite) throw Object.assign(new Error('invite code is no longer valid — ask for a new one'), { status: 403 })
     }
-    await conn.execute('INSERT INTO users(id,name,invited_by,created_at) VALUES (?,?,?,?)', [user.id, user.name, inviteCode, user.created])
-    await conn.execute('INSERT INTO passkey_credentials(credential_id,user_id,public_key,counter,transports) VALUES (?,?,?,?,?)', [credential.id, user.id, credential.publicKey, credential.counter || 0, JSON.stringify(credential.transports || [])])
+    await conn.execute('INSERT INTO users(id,name,email,password_hash,invited_by,created_at) VALUES (?,?,?,?,?,?)', [user.id, user.name, user.email, user.passwordHash, inviteCode, user.created])
     await conn.execute('INSERT INTO client_states(user_id,settings_json,plan_json,progress_json,plan_updated_by) VALUES (?,?,?,?,?)', [user.id, '{}', '{}', '{}', user.id])
     if (invite) await conn.execute('UPDATE invites SET used_by=?,used_at=? WHERE code=?', [user.id, user.created, inviteCode])
     await conn.commit()

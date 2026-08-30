@@ -46,6 +46,16 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  seed-trainer:
+    profiles: ["tools"]
+    build: ./api
+    command: npm run db:seed-trainer
+    restart: "no"
+    environment: *db-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   # One-time: download the exercise images + GIFs into ./media (skipped if already there).
   # ~140 MB, from github.com/hasaneyldrm/exercises-dataset (CC).
   media:

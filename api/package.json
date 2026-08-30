@@ -9,10 +9,10 @@
     "start": "node server.js",
     "db:migrate": "node scripts/migrate.js",
     "db:import-json": "node scripts/import-json.js",
+    "db:seed-trainer": "node scripts/seed-trainer.js",
     "test": "node --test"
   },
   "dependencies": {
-    "@simplewebauthn/server": "^13.1.1",
     "mysql2": "^3.15.3",
     "web-push": "^3.6.7"
   }
