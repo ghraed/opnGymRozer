@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtVol, fmtDur, durPart, todayISO, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, exLine } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -14,7 +14,7 @@ import Icon from './components/Icon.jsx'
 import { Button, Slider, Switch, Segmented, SelectRow, Row } from './components/ui.jsx'
 import { glyphOf, GLYPH_GROUPS, DEFAULT_GLYPH } from './lib/glyphs.js'
 import BodyMap from './components/BodyMap.jsx'
-import { loadOfWorkouts } from './lib/muscles.js'
+import { loadOfWorkouts, musclesOf, MUSCLE_NAME } from './lib/muscles.js'
 import { parseImport, mergeImport } from './lib/import-csv.js'
 import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-share.js'
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
@@ -354,6 +354,37 @@ function ExerciseDetail({ ex, close }) {
   </>
 }
 export const exerciseDetailSheet = ex => ui().openSheet(close => <ExerciseDetail ex={ex} close={close} />)
+
+/* ============================ routine muscle breakdown ============================ */
+function MuscleExercises({ routineId, muscle }) {
+  const st = useStore(s => s.S)
+  const routine = st.routines.find(r => r.id === routineId)
+  const hits = (routine?.ex || []).map(cfg => {
+    const exercise = EXIDX[cfg.id]
+    return { cfg, exercise, contribution: musclesOf(exercise)[muscle] || 0 }
+  }).filter(x => x.exercise && x.contribution > 0)
+
+  return <>
+    <h3>{t('{0} exercises', t(MUSCLE_NAME[muscle]))}</h3>
+    <div className="muted small" style={{ marginBottom: 12 }}>
+      {t('Exercises in {0} that train this muscle.', routine?.name || t('this routine'))}
+    </div>
+    <div className="list">
+      {hits.map(({ cfg, exercise, contribution }, i) => <div key={exercise.id + '-' + i} className="item" onClick={() => exerciseDetailSheet(exercise)}>
+        <Thumb ex={exercise} />
+        <div className="grow">
+          <div className="tt capitalize">{exercise.n}</div>
+          <div className="ss">{exLine(cfg, st.unit)}</div>
+        </div>
+        <span className={'tag' + (contribution >= 0.7 ? ' acc' : '')}>{t(contribution >= 0.7 ? 'Primary' : 'Supporting')}</span>
+        <Icon name="chevronRight" className="chev" />
+      </div>)}
+    </div>
+  </>
+}
+
+export const muscleExercisesSheet = (routineId, muscle) =>
+  ui().openSheet(close => <MuscleExercises routineId={routineId} muscle={muscle} close={close} />)
 
 /* ============================ add to routine ============================ */
 function AddToRoutine({ ex, close }) {

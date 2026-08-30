@@ -6,7 +6,7 @@ import { uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { supersetUnits, cleanupSg, exLine } from '../lib/history.js'
 import { Thumb } from '../components/Media.jsx'
-import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet } from '../sheets.jsx'
+import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, muscleExercisesSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 import { Button, SelectRow } from '../components/ui.jsx'
@@ -88,7 +88,9 @@ export default function RoutineEdit() {
         <h2>{t('What this session hits')}</h2>
         <BodyMap load={load} body={S.body} />
         <div className="mchips">
-          {worked.slice(0, 6).map(m => <span key={m} className="mchip">{t(MUSCLE_NAME[m])}</span>)}
+          {worked.map(m => <button type="button" key={m} className="mchip action" onClick={() => muscleExercisesSheet(r.id, m)}>
+            {t(MUSCLE_NAME[m])}
+          </button>)}
         </div>
       </div>
     })()}
