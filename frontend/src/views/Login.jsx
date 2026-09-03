@@ -26,6 +26,7 @@ function RegisterSheet({ close }) {
     } catch (e) { useUI.getState().toast(e.message || t('Registration failed')) } finally { setBusy(false) }
   }
   return <>
+    <img className="register-logo" src="/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
     <h3>{t('Create your account')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Use your email and a password of at least 8 characters.')}</div>
     <input ref={ref} className="input" placeholder={t('Your name')} maxLength={40} value={name} onChange={e => setName(e.target.value)} />
