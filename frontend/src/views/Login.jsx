@@ -25,7 +25,7 @@ function RegisterSheet({ close }) {
       onboardingSheet()
     } catch (e) { useUI.getState().toast(e.message || t('Registration failed')) } finally { setBusy(false) }
   }
-  return <>
+  return <div className="auth-gold">
     <img className="register-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
     <h3>{t('Create your account')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Use your email and a password of at least 8 characters.')}</div>
@@ -34,7 +34,7 @@ function RegisterSheet({ close }) {
     <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="new-password" placeholder={t('Password (at least 8 characters)')} value={password} onChange={e => setPassword(e.target.value)} />
     {inviteOnly && <><div style={{ height: 10 }} /><input className="input" placeholder={t('Invite code')} maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} /></>}
     <div style={{ height: 12 }} /><Button variant="primary" onClick={go} disabled={busy}>{busy ? t('Creating account…') : t('Create account')}</Button>
-  </>
+  </div>
 }
 
 export default function Login() {
@@ -48,8 +48,8 @@ export default function Login() {
   }
   const head = <img className="login-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
   const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
-  if (DEMO) return <div className="narrow" style={wrap}>{head}<div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div><Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button></div>
-  return <div className="narrow" style={wrap}>
+  if (DEMO) return <div className="narrow auth-gold" style={wrap}>{head}<div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div><Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button></div>
+  return <div className="narrow auth-gold" style={wrap}>
     {head}<div className="muted" style={{ marginBottom: 24 }}>{t('Your workouts. Your weights. Your profile.')}</div>
     <input className="input" type="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
     <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="current-password" placeholder={t('Password')} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && signIn()} />

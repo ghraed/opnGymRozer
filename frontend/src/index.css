@@ -210,6 +210,11 @@ h4.sec{
   display:block;width:min(220px,58vw);height:auto;margin:0 auto 10px;
   border-radius:22px;object-fit:contain;
 }
+.auth-gold{
+  --acc:#d4a53a;
+  --acc-2:#ad7818;
+  --on-acc:#090704;
+}
 .register-logo{
   display:block;width:min(132px,38vw);height:auto;margin:0 auto 12px;
   border-radius:16px;object-fit:contain;
