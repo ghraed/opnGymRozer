@@ -5,6 +5,7 @@ import { t } from '../lib/i18n.js'
 import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '../components/ui.jsx'
+import { onboardingSheet } from '../sheets.jsx'
 
 function RegisterSheet({ close }) {
   const { setUser, pushState, pullState } = useStore()
@@ -21,6 +22,7 @@ function RegisterSheet({ close }) {
       setUser(u); close()
       if (hasData(useStore.getState().S)) { await pushState(); useUI.getState().toast(t('Profile created — data from this device moved into it')) }
       else { await pullState(); useUI.getState().toast(t('Welcome, {0}', u.name)) }
+      onboardingSheet()
     } catch (e) { useUI.getState().toast(e.message || t('Registration failed')) } finally { setBusy(false) }
   }
   return <>

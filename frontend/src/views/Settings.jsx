@@ -10,7 +10,7 @@ import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
 import { DEMO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
-import { loadStarterPlan, confirmSheet, importFromApp } from '../sheets.jsx'
+import { loadStarterPlan, confirmSheet, importFromApp, onboardingSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
@@ -89,6 +89,9 @@ export default function Settings() {
 
     {/* ---------- general ---------- */}
     <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>
+      {user && <Row icon="personCircle" iconTint="var(--purple)" title={t('Fitness profile')}
+        subtitle={S.onboarding?.completedAt ? t('{0} · {1} days per week', S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness', S.onboarding.days) : t('Finish your setup for a recommended plan')}
+        accessory="chevron" onClick={() => onboardingSheet({ allowSkip: false })} />}
       <SelectRow
         icon="globe" iconTint="var(--blue)" title={t('Language')}
         value={S.lang || 'en'} onChange={v => update(s => { s.lang = v })}
@@ -329,6 +332,7 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
       const u = await passwordRegister(n, email.trim(), password, code.trim()); setUser(u); close()
       if (hasData(useStore.getState().S)) { await pushState(); toast(t('Profile created — data moved into it')) }
       else { await pullState(); toast(t('Welcome, {0}', u.name)) }
+      onboardingSheet()
     } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message || t('Registration failed')) }
   }
   return <>

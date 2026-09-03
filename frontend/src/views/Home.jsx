@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { effectiveRoutine, effectiveRoutineId, streakWeeks, lastBW, setsDoneActive } from '../lib/history.js'
 import { fmtNum, fmtDate, todayISO, isoOf, weekKey, DAYS } from '../lib/format.js'
 import { t, dateLocale } from '../lib/i18n.js'
-import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, bwDeltaColor } from '../sheets.jsx'
+import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadStarterPlan, onboardingSheet, bwDeltaColor } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -83,6 +83,26 @@ export default function Home() {
         <div className="muted small" style={{ marginBottom: 12 }}>{t('Set up your weekly routine to get going — or load a ready-made Push / Pull / Legs plan.')}</div>
         <Button variant="primary" icon="sparkles" onClick={loadStarterPlan}>{t('Choose a workout program')}</Button>
         <div style={{ height: 8 }} /><Button onClick={() => nav('/plan')}>{t('Build my own plan')}</Button>
+      </div>
+    )}
+
+    {!S.onboarding?.completedAt && user && (
+      <div className="card">
+        <div className="row" style={{ gap: 10, marginBottom: 6 }}>
+          <span className="lrow-i"><Icon name="sparkles" /></span>
+          <div className="big" style={{ fontSize: 20 }}>{t('Finish your setup')}</div>
+        </div>
+        <div className="muted small" style={{ marginBottom: 12 }}>{t('Answer a few fitness questions and we’ll recommend a plan that fits your goals, schedule and equipment.')}</div>
+        <Button variant="primary" icon="sparkles" onClick={() => onboardingSheet()}>{t('Set up my plan')}</Button>
+      </div>
+    )}
+
+    {S.onboarding?.completedAt && (
+      <div className="card">
+        <div className="row between">
+          <div><div className="small muted">{t('Your focus')}</div><div style={{ fontWeight: 600 }}>{t(S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness')}</div></div>
+          <span className="tag acc">{S.onboarding.days} {t('days/week')}</span>
+        </div>
       </div>
     )}
 

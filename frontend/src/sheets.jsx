@@ -20,6 +20,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
+import Onboarding from './components/Onboarding.jsx'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -100,6 +101,10 @@ function ProgramBuilder({ close }) {
 export const workoutProgramSheet = () => ui().openSheet(close => <ProgramBuilder close={close} />)
 // Compatibility name used by Home and Settings.
 export const loadStarterPlan = workoutProgramSheet
+
+// Account onboarding and the editable Settings profile use the same sheet, so their saved
+// answers always produce the same recommendation.
+export const onboardingSheet = ({ allowSkip = true } = {}) => ui().openSheet(close => <Onboarding close={close} allowSkip={allowSkip} />)
 
 /* ============================ weight picker (shared: body weight + goal) ============================ */
 // Fixed range, not a moving window — a window that resizes itself mid-drag (the previous
