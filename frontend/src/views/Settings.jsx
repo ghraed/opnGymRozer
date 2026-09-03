@@ -90,7 +90,7 @@ export default function Settings() {
     {/* ---------- general ---------- */}
     <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>
       {user && <Row icon="personCircle" iconTint="var(--purple)" title={t('Fitness profile')}
-        subtitle={S.onboarding?.completedAt ? t('{0} · {1} days per week', S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness', S.onboarding.days) : t('Finish your setup for a recommended plan')}
+        subtitle={S.onboarding?.completedAt ? t('{0} · {1} days per week', t(S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness'), S.onboarding.days) : t('Finish your setup for a recommended plan')}
         accessory="chevron" onClick={() => onboardingSheet({ allowSkip: false })} />}
       <SelectRow
         icon="globe" iconTint="var(--blue)" title={t('Language')}

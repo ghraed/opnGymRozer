@@ -1,12 +1,11 @@
 import { EXDB, EXIDX } from './exercises.js'
-import { buildProgram } from './starter.js'
+import { buildProgram, programById } from './starter.js'
 import { todayISO, uid } from './format.js'
 
 export const GOALS = [
   { value: 'muscle', label: 'Build muscle' },
   { value: 'strength', label: 'Build strength' },
   { value: 'lose_weight', label: 'Lose weight' },
-  { value: 'gain_weight', label: 'Gain weight' },
   { value: 'fitness', label: 'General fitness' },
 ]
 
@@ -22,7 +21,17 @@ export const EQUIPMENT = [
   { value: 'bodyweight', label: 'Bodyweight only' },
 ]
 
-const PROGRAM_FOR_DAYS = { 2: 'full_body', 3: 'full_body', 4: 'upper_lower', 5: 'bro_split', 6: 'ppl' }
+// Split choice follows available days, not a claim that one split is inherently
+// superior. When weekly volume is matched, full-body and split routines perform
+// similarly; this rotation keeps major muscle groups recurring through the week.
+const PROGRAM_FOR_DAYS = { 2: 'full_body', 3: 'full_body', 4: 'upper_lower', 5: 'upper_lower', 6: 'ppl' }
+const PROGRAMS_FOR_DAYS = {
+  2: ['full_body'],
+  3: ['full_body', 'ppl'],
+  4: ['upper_lower', 'full_body'],
+  5: ['upper_lower', 'bro_split'],
+  6: ['ppl', 'upper_lower'],
+}
 const DAYS_FOR_COUNT = {
   2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6],
 }
@@ -57,19 +66,17 @@ const EQUIPMENT_REPLACEMENTS = {
 
 export function programForDays(days) { return PROGRAM_FOR_DAYS[Math.max(2, Math.min(6, Number(days) || 3))] }
 
+export function compatiblePrograms(days) {
+  return PROGRAMS_FOR_DAYS[Math.max(2, Math.min(6, Number(days) || 3))]
+}
+
 export function recommendationFor(profile = {}) {
   const days = Math.max(2, Math.min(6, Number(profile.days) || 3))
   const goal = profile.goal || 'fitness'
-  if (goal === 'lose_weight') return { days, programId: 'fat_loss', name: 'Cardio + Full Body', summary: `${days} training days · cardio focused` }
-  if (goal === 'fitness') return { days, programId: 'hybrid_fitness', name: 'Strength + Cardio', summary: `${days} training days · balanced fitness` }
-  if (goal === 'strength') {
-    const programId = days <= 3 ? 'strength_full' : 'strength_upper_lower'
-    return { days, programId, name: days <= 3 ? 'Full Body Strength' : 'Upper / Lower Strength', summary: `${days} training days · strength focused` }
-  }
-  const programId = programForDays(days)
-  const baseName = { full_body: 'Full Body', upper_lower: 'Upper / Lower', bro_split: 'Bro Split', ppl: 'Push / Pull / Legs' }[programId]
-  const name = `${baseName} Hypertrophy`
-  return { days, programId, name, summary: `${days} training days · ${name}` }
+  const recommendedProgramId = programForDays(days)
+  const programId = compatiblePrograms(days).includes(profile.programId) ? profile.programId : recommendedProgramId
+  const name = programById(programId)?.name || 'Full Body'
+  return { days, goal, programId, recommendedProgramId, name, summary: `${days} training days · ${name}` }
 }
 
 function equipmentAllows(exercise, equipment) {
@@ -102,7 +109,9 @@ function applyPrescription(entry, profile, index = 0) {
     next.reps = primary ? 5 : 8
   } else if (goal === 'muscle' || goal === 'gain_weight') {
     const primary = index < 4
-    next.sets = experience === 'advanced' ? 4 : experience === 'beginner' ? 2 : 3
+    next.sets = primary
+      ? (experience === 'advanced' ? 4 : experience === 'beginner' ? 2 : 3)
+      : (experience === 'advanced' ? 3 : 2)
     next.reps = primary ? 8 : 12
   } else if (goal === 'lose_weight') {
     next.sets = experience === 'beginner' ? 2 : 3
@@ -115,9 +124,11 @@ function applyPrescription(entry, profile, index = 0) {
 }
 
 function adaptRoutine(routine, profile) {
+  const maximumExercises = { strength: 6, lose_weight: 5, fitness: 6 }[profile.goal] || Infinity
   return {
     ...routine,
-    ex: routine.ex.map(entry => substitute(entry, profile.equipment || 'full_gym')).filter(Boolean)
+    prog: profile.goal === 'muscle' || profile.goal === 'gain_weight' ? 'double' : 'linear',
+    ex: routine.ex.slice(0, maximumExercises).map(entry => substitute(entry, profile.equipment || 'full_gym')).filter(Boolean)
       .map((entry, index) => applyPrescription(entry, profile, index)),
   }
 }
@@ -147,53 +158,55 @@ function addCardioFinisher(routine, profile, index, minutes) {
   return { ...routine, ex: [...routine.ex, cardioRoutine(profile, index, minutes).ex[0]] }
 }
 
-function buildStrength(profile, recommendation) {
-  const specs = recommendation.days <= 3 ? STRENGTH_FULL.slice(0, recommendation.days) : STRENGTH_UPPER_LOWER
-  return specs.map(spec => routineFromSpec(spec, profile, recommendation.programId))
-}
-
-function buildHybrid(profile, recommendation, cardioFocused) {
-  const days = recommendation.days
-  const resistanceCount = cardioFocused ? (days === 6 ? 3 : 2) : (days >= 5 ? 3 : 2)
-  let resistance = buildProgram('full_body').routines.slice(0, resistanceCount).map(r => adaptRoutine({ ...r, name: r.name.replace('Full Body', 'Full Body Resistance') }, profile))
-  // With only two available days, both sessions combine resistance and aerobic work so the
-  // plan still trains every major muscle group twice while making cardio the largest block.
-  if (days === 2) return resistance.map((routine, index) => addCardioFinisher(routine, profile, index, cardioFocused ? 30 : 15))
-  if (cardioFocused) resistance = resistance.map((routine, index) => addCardioFinisher(routine, profile, index, 20))
-  const cardioCount = days - resistance.length
-  const cardio = Array.from({ length: cardioCount }, (_, index) => cardioRoutine(profile, index, cardioFocused ? 40 : 25))
-  const ordered = []
-  while (resistance.length || cardio.length) {
-    if (resistance.length) ordered.push(resistance.shift())
-    if (cardio.length) ordered.push(cardio.shift())
+function buildSelectedRoutines(profile, recommendation) {
+  let routines
+  if (profile.goal === 'strength' && recommendation.programId === 'full_body') {
+    const count = recommendation.days === 2 ? 2 : STRENGTH_FULL.length
+    routines = STRENGTH_FULL.slice(0, count).map(spec => routineFromSpec(spec, profile, recommendation.programId))
+  } else if (profile.goal === 'strength' && recommendation.programId === 'upper_lower') {
+    routines = STRENGTH_UPPER_LOWER.map(spec => routineFromSpec(spec, profile, recommendation.programId))
+  } else {
+    const built = buildProgram(recommendation.programId)
+    const count = recommendation.programId === 'full_body' && recommendation.days === 2 ? 2 : built.routines.length
+    routines = built.routines.slice(0, count).map(routine => adaptRoutine(routine, profile))
   }
-  return ordered
+  if (profile.goal === 'lose_weight' || profile.goal === 'fitness') {
+    const minutes = profile.goal === 'lose_weight' ? 30 : 20
+    routines = routines.map((routine, index) => addCardioFinisher(routine, profile, index, minutes))
+  }
+  return routines
 }
 
 /** Build a fresh, equipment-aware plan for an onboarding profile. */
 export function buildOnboardingProgram(profile = {}) {
   const recommendation = recommendationFor(profile)
-  let routines
-  if (recommendation.programId === 'fat_loss') routines = buildHybrid(profile, recommendation, true)
-  else if (recommendation.programId === 'hybrid_fitness') routines = buildHybrid(profile, recommendation, false)
-  else if (recommendation.programId.startsWith('strength_')) routines = buildStrength(profile, recommendation)
-  else {
-    const built = buildProgram(recommendation.programId)
-    const routineCount = recommendation.days === 2 ? 2 : built.routines.length
-    routines = built.routines.slice(0, routineCount).map(routine => adaptRoutine(routine, profile))
-  }
+  const routines = buildSelectedRoutines(profile, recommendation)
   const week = {}
   DAYS_FOR_COUNT[recommendation.days].forEach((day, index) => { week[day] = routines[index % routines.length].id })
-  return { ...recommendation, routines, week }
+  const routineById = Object.fromEntries(routines.map(routine => [routine.id, routine]))
+  const cardioMinutes = Object.values(week).flatMap(id => routineById[id]?.ex || [])
+    .filter(entry => entry.mode === 'cardio').reduce((sum, entry) => sum + (Number(entry.min) || 0), 0)
+  const main = routines.flatMap(routine => routine.ex).find(entry => entry.mode !== 'cardio')
+  return {
+    ...recommendation, routines, week,
+    evidence: {
+      cardioMinutes,
+      additionalCardioMinutes: Math.max(0, 150 - cardioMinutes),
+      mainSets: main?.sets || 0,
+      mainReps: main?.reps || 0,
+      needsProfessionalReview: !!String(profile.injuryNote || '').trim(),
+    },
+  }
 }
 
 /** Apply an onboarding result to a state draft. Workout history is intentionally untouched. */
 export function applyOnboarding(state, profile = {}, now = Date.now()) {
   const plan = buildOnboardingProgram(profile)
   const currentWeight = Math.round(Number(profile.currentWeight) * 10) / 10
+  const height = Number(profile.height) > 0 ? Math.round(Number(profile.height) * 10) / 10 : null
   const targetWeight = (profile.goal === 'lose_weight' || profile.goal === 'gain_weight') && Number(profile.targetWeight) > 0
     ? Math.round(Number(profile.targetWeight) * 10) / 10 : null
-  state.onboarding = { ...profile, currentWeight, targetWeight, completedAt: now }
+  state.onboarding = { ...profile, currentWeight, height, targetWeight, completedAt: now }
   if (profile.body === 'male' || profile.body === 'female') state.body = profile.body
   const today = todayISO(), entry = state.bodyweight.find(item => item.d === today)
   if (entry) { entry.w = currentWeight; entry.t = now }
