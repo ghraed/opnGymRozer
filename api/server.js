@@ -19,7 +19,7 @@ const publicUser = u => ({ id: u.id, name: u.name, role: u.role, admin: u.role =
 const sessionVersion = u => Number(u.session_version) || 0
 const sign = p => p + '.' + crypto.createHmac('sha256', SECRET).update(p).digest('base64url')
 const makeSession = u => sign(`${u.id}:${Date.now() + SESSION_DAYS * 86400000}:${sessionVersion(u)}`)
-const sessionCookie = u => `gymsid=${makeSession(u)}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly;${SECURE} SameSite=Lax`
+const sessionCookie = (u, remember = true) => `gymsid=${makeSession(u)}; Path=/;${remember ? ` Max-Age=${SESSION_DAYS * 86400};` : ''} HttpOnly;${SECURE} SameSite=Lax`
 const clearCookie = `gymsid=; Path=/; Max-Age=0; HttpOnly;${SECURE} SameSite=Lax`
 
 function verifySig(token) {
@@ -105,7 +105,7 @@ const routes = {
     const u = await getUserByEmail(pool, email)
     if (!u || !passwordMatches(password, u.password_hash)) return json(res, 401, { error: 'invalid email or password' })
     if (u.disabled) return json(res, 403, { error: 'this account has been disabled' })
-    json(res, 200, { user: publicUser(u) }, { 'Set-Cookie': sessionCookie(u) })
+    json(res, 200, { user: publicUser(u) }, { 'Set-Cookie': sessionCookie(u, b.remember !== false) })
   },
   'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
   'POST /api/logout/all': async (req, res) => { const u = await requireUser(req, res); if (u) { await pool.execute('UPDATE users SET session_version=session_version+1 WHERE id=?', [u.id]); json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }) } },

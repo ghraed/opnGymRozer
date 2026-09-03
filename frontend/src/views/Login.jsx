@@ -4,7 +4,7 @@ import { passwordLogin, passwordRegister, api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
-import { Button } from '../components/ui.jsx'
+import { Button, Check } from '../components/ui.jsx'
 import { onboardingSheet } from '../sheets.jsx'
 
 function RegisterSheet({ close }) {
@@ -39,11 +39,11 @@ function RegisterSheet({ close }) {
 
 export default function Login() {
   const { setUser, pullState, setGuest } = useStore()
-  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [busy, setBusy] = useState(false)
+  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [remember, setRemember] = useState(true), [busy, setBusy] = useState(false)
   const signIn = async () => {
     if (!email.trim() || !password) return useUI.getState().toast(t('Enter your email and password'))
     setBusy(true)
-    try { const u = await passwordLogin(email.trim(), password); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
+    try { const u = await passwordLogin(email.trim(), password, remember); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { useUI.getState().toast(e.message || t('Sign-in failed')) } finally { setBusy(false) }
   }
   const head = <img className="login-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
@@ -51,8 +51,12 @@ export default function Login() {
   if (DEMO) return <div className="narrow auth-gold" style={wrap}>{head}<div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div><Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button></div>
   return <div className="narrow auth-gold" style={wrap}>
     {head}<div className="muted" style={{ marginBottom: 24 }}>{t('Your workouts. Your weights. Your profile.')}</div>
-    <input className="input" type="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
-    <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="current-password" placeholder={t('Password')} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && signIn()} />
+    <input className="input" type="email" name="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
+    <div style={{ height: 10 }} /><input className="input" type="password" name="password" autoComplete="current-password" placeholder={t('Password')} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && signIn()} />
+    <div className="login-remember">
+      <Check checked={remember} onChange={setRemember} size={24} />
+      <button type="button" onClick={() => setRemember(v => !v)}>{t('Remember me for 90 days')}</button>
+    </div>
     <div style={{ height: 12 }} /><Button variant="primary" icon="person" onClick={signIn} disabled={busy}>{busy ? t('Signing in…') : t('Sign in')}</Button>
     <div style={{ height: 10 }} /><Button icon="sparkles" onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create account')}</Button>
     <div style={{ height: 10 }} /><Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>

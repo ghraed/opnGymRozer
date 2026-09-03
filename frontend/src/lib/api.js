@@ -11,7 +11,7 @@ export async function passwordRegister(name, email, password, code) {
   const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, code: code || '' }) })
   return res.user
 }
-export async function passwordLogin(email, password) {
-  const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) })
+export async function passwordLogin(email, password, remember = true) {
+  const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password, remember }) })
   return res.user
 }

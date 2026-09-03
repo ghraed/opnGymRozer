@@ -215,6 +215,11 @@ h4.sec{
   --acc-2:#ad7818;
   --on-acc:#090704;
 }
+.login-remember{
+  display:flex;align-items:center;gap:10px;margin:12px 2px 0;
+  color:var(--label-2);font-size:14px;text-align:left;
+}
+.login-remember>button:last-child{flex:1;padding:4px 0;text-align:left;color:inherit}
 .register-logo{
   display:block;width:min(132px,38vw);height:auto;margin:0 auto 12px;
   border-radius:16px;object-fit:contain;
