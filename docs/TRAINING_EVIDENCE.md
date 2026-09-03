@@ -8,8 +8,10 @@ healthy adults. It is not a medical assessment and cannot promise a “perfect�
 - **Schedule:** full-body for 2–3 available days, upper/lower rotation for 4–5, and
   push/pull/legs for 6. Split and full-body routines produce similar strength and hypertrophy
   when volume is equated, so availability and repeat exposure drive this choice. The user may
-  select another split that still fits the chosen number of days; the builder then regenerates
-  its exercises and prescriptions for the goal instead of treating the split as the goal.
+  select any other available split; the builder then regenerates its exercises and
+  prescriptions for the goal instead of treating the split as the goal. When a split has more
+  named sessions than the user's available days, its highest-priority movements are combined
+  across the available sessions so no source routine is simply omitted.
 - **Strength:** main lifts use heavier sets of about 5 repetitions. Higher loads produce
   greater improvements in maximal strength than lower loads.
 - **Hypertrophy:** multiple working sets use mostly 8–12 repetitions, with volume increasing

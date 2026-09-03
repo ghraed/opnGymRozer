@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EXIDX } from './exercises.js'
-import { applyOnboarding, buildOnboardingProgram, compatiblePrograms, programForDays } from './onboarding.js'
+import { applyOnboarding, buildOnboardingProgram, selectablePrograms, programForDays } from './onboarding.js'
 import { todayISO } from './format.js'
 
 describe('onboarding recommendations', () => {
@@ -10,7 +10,7 @@ describe('onboarding recommendations', () => {
     expect(programForDays(4)).toBe('upper_lower')
     expect(programForDays(5)).toBe('upper_lower')
     expect(programForDays(6)).toBe('ppl')
-    expect(compatiblePrograms(5)).toEqual(['upper_lower', 'bro_split'])
+    expect(selectablePrograms()).toEqual(['ppl', 'upper_lower', 'full_body', 'bro_split'])
     for (const goal of ['muscle', 'strength', 'lose_weight', 'gain_weight', 'fitness']) {
       for (let days = 2; days <= 6; days++) {
         const plan = buildOnboardingProgram({ goal, days, equipment: 'full_gym' })
@@ -56,8 +56,29 @@ describe('onboarding recommendations', () => {
     expect(broMuscle.routines[0].ex.length).toBeGreaterThan(broFatLoss.routines[0].ex.filter(entry => entry.mode !== 'cardio').length)
     expect(broFatLoss.routines[0].ex[0]).toMatchObject({ sets: 2, reps: 10 })
 
-    const incompatible = buildOnboardingProgram({ days: 3, programId: 'bro_split', goal: 'muscle' })
-    expect(incompatible.programId).toBe('full_body')
+    const adapted = buildOnboardingProgram({ days: 3, programId: 'bro_split', goal: 'muscle' })
+    expect(adapted.programId).toBe('bro_split')
+    expect(adapted.routines).toHaveLength(3)
+    expect(new Set(Object.values(adapted.week))).toEqual(new Set(adapted.routines.map(routine => routine.id)))
+
+    const unknown = buildOnboardingProgram({ days: 3, programId: 'unknown', goal: 'muscle' })
+    expect(unknown.programId).toBe('full_body')
+  })
+
+  it('supports every split at every training frequency without dropping source coverage', () => {
+    for (let days = 2; days <= 6; days++) {
+      for (const programId of selectablePrograms()) {
+        const plan = buildOnboardingProgram({ days, programId, goal: 'strength', experience: 'intermediate' })
+        expect(plan.programId).toBe(programId)
+        expect(Object.keys(plan.week)).toHaveLength(days)
+        expect(plan.routines.length).toBeLessThanOrEqual(days)
+        expect(new Set(Object.values(plan.week))).toEqual(new Set(plan.routines.map(routine => routine.id)))
+        plan.routines.forEach(routine => {
+          expect(routine.ex.length).toBeGreaterThan(0)
+          routine.ex.forEach(entry => expect(entry).toMatchObject({ sets: expect.any(Number), reps: expect.any(Number) }))
+        })
+      }
+    }
   })
 
   it('makes fat-loss plans cardio focused while retaining resistance days', () => {
@@ -76,12 +97,15 @@ describe('onboarding recommendations', () => {
   })
 
   it('records weights and profile data without touching workout history', () => {
-    const state = { body: 'male', bodyweight: [], targetW: null, routines: [], week: {}, workouts: [{ id: 'completed' }] }
+    const state = { body: 'male', bodyweight: [], targetW: null, routines: [], week: {}, dayPlan: { '2099-01-01': 'rest' }, workouts: [{ id: 'completed' }] }
     applyOnboarding(state, { goal: 'lose_weight', currentWeight: 82.4, height: 175.5, targetWeight: 75, days: 3, body: 'female' }, 123)
     expect(state.onboarding).toMatchObject({ completedAt: 123, currentWeight: 82.4, height: 175.5, targetWeight: 75 })
     expect(state.bodyweight).toEqual([{ d: todayISO(), w: 82.4, t: 123 }])
     expect(state.targetW).toBe(75)
     expect(state.body).toBe('female')
     expect(state.workouts).toEqual([{ id: 'completed' }])
+    expect(Object.keys(state.week)).toHaveLength(3)
+    expect(Object.values(state.week).every(id => state.routines.some(routine => routine.id === id))).toBe(true)
+    expect(state.dayPlan).toEqual({})
   })
 })

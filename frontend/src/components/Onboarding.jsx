@@ -5,7 +5,7 @@ import { t } from '../lib/i18n.js'
 import { bmiFor } from '../lib/bmi.js'
 import { EXIDX } from '../lib/exercises.js'
 import { programById } from '../lib/starter.js'
-import { buildOnboardingProgram, applyOnboarding, compatiblePrograms, programForDays, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
+import { buildOnboardingProgram, applyOnboarding, selectablePrograms, programForDays, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
 import Icon from './Icon.jsx'
 import { Button, NumberField, Segmented, TextArea } from './ui.jsx'
 
@@ -26,7 +26,7 @@ export default function Onboarding({ close, allowSkip = true }) {
   const previous = st.onboarding || {}
   const latestWeight = st.bodyweight[st.bodyweight.length - 1]?.w || null
   const initialDays = previous.days || 3
-  const initialProgramId = compatiblePrograms(initialDays).includes(previous.programId) ? previous.programId : programForDays(initialDays)
+  const initialProgramId = selectablePrograms().includes(previous.programId) ? previous.programId : programForDays(initialDays)
   const [profile, setProfile] = useState({
     goal: previous.goal === 'gain_weight' ? 'muscle' : previous.goal || 'muscle', currentWeight: previous.currentWeight || latestWeight || null,
     height: previous.height || null,
@@ -37,6 +37,7 @@ export default function Onboarding({ close, allowSkip = true }) {
   const [confirmReplace, setConfirmReplace] = useState(false)
   const plan = useMemo(() => buildOnboardingProgram(profile), [profile])
   const profileBmi = bmiFor(profile.currentWeight, profile.height, st.unit)
+  const hasExistingSchedule = Object.values(st.week || {}).some(Boolean)
   const set = values => setProfile(current => ({ ...current, ...values }))
 
   const next = () => {
@@ -86,10 +87,7 @@ export default function Onboarding({ close, allowSkip = true }) {
     </>}
     {step === 1 && <>
       <h4 className="sec">{t('How often can you train?')}</h4>
-      <Segmented options={[2, 3, 4, 5, 6].map(value => ({ value, label: String(value) }))} value={profile.days} onChange={days => {
-        const options = compatiblePrograms(days)
-        set({ days, programId: options.includes(profile.programId) ? profile.programId : programForDays(days) })
-      }} />
+      <Segmented options={[2, 3, 4, 5, 6].map(value => ({ value, label: String(value) }))} value={profile.days} onChange={days => set({ days })} />
       <p className="small muted">{t('{0} days per week', profile.days)}</p>
       <h4 className="sec">{t('Training experience')}</h4>
       <ChoiceList options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
@@ -109,7 +107,7 @@ export default function Onboarding({ close, allowSkip = true }) {
         <div className="recommendation-summary">{t('{0} days per week', plan.days)} · {t('{0} exercises', plan.routines.reduce((sum, routine) => sum + routine.ex.length, 0))}</div>
         <div className="recommendation-section-label">{t('Training split')}</div>
         <div className="recommendation-splits">
-          {compatiblePrograms(profile.days).map(programId => {
+          {[plan.recommendedProgramId, ...selectablePrograms().filter(programId => programId !== plan.recommendedProgramId)].map(programId => {
             const program = programById(programId)
             return <button type="button" key={programId} aria-pressed={plan.programId === programId}
               className={`recommendation-split${plan.programId === programId ? ' on' : ''}`} onClick={() => set({ programId })}>
@@ -132,7 +130,10 @@ export default function Onboarding({ close, allowSkip = true }) {
             const exercises = routine.ex.filter(entry => entry.mode !== 'cardio')
             return <div className="recommendation-routine" key={routine.id}>
               <strong>{t(routine.name)}</strong>
-              <span>{exercises.slice(0, 4).map(entry => EXIDX[entry.id]?.n).filter(Boolean).join(' · ')}</span>
+              <span>{exercises.slice(0, 4).map(entry => {
+                const name = EXIDX[entry.id]?.n
+                return name ? `${name} — ${entry.sets}×${entry.reps}` : null
+              }).filter(Boolean).join(' · ')}</span>
               {exercises.length > 4 && <small>{t('+{0} more', exercises.length - 4)}</small>}
             </div>
           })}
@@ -148,14 +149,16 @@ export default function Onboarding({ close, allowSkip = true }) {
         </div>}
         <div className="small muted recommendation-note">{t('This is an evidence-informed starting point, not a guarantee. Progress gradually and adjust for recovery and pain.')}</div>
       </div>
-      {st.routines.length > 0 && !confirmReplace && <Button variant="danger" onClick={() => setConfirmReplace(true)}>{t('Replace active schedule')}</Button>}
-      {st.routines.length > 0 && confirmReplace && <div className="card" style={{ borderColor: 'var(--orange)', marginBottom: 12 }}><div className="small">{t('Your past workouts and existing routines will stay saved. The new plan will replace only your weekly schedule.')}</div><div style={{ height: 10 }} /><Button variant="danger" onClick={apply}>{t('Confirm and apply plan')}</Button></div>}
+      {hasExistingSchedule && confirmReplace && <div className="card" style={{ borderColor: 'var(--orange)', marginBottom: 12 }}>
+        <div className="small">{t('Your past workouts and existing routines will stay saved. The new plan will replace only your weekly schedule.')}</div>
+        <div style={{ height: 10 }} /><Button variant="danger" onClick={apply}>{t('Confirm and apply plan')}</Button>
+      </div>}
     </>}
     <div style={{ height: 16 }} />
     <div className="row onboarding-actions" style={{ gap: 8 }}>
       {step > 0 && <Button className="onboarding-back" onClick={() => setStep(value => value - 1)}>{t('Back')}</Button>}
       {step < 2 ? <Button variant="primary" onClick={next} style={{ flex: 1 }}>{t('Next')}</Button>
-        : !st.routines.length ? <Button variant="primary" onClick={apply} style={{ flex: 1 }}>{t('Apply my plan')}</Button> : null}
+        : !confirmReplace && <Button variant="primary" onClick={hasExistingSchedule ? () => setConfirmReplace(true) : apply} style={{ flex: 1 }}>{t('Apply my plan')}</Button>}
     </div>
     {allowSkip && step < 2 && <><div style={{ height: 8 }} /><Button variant="ghost" className="onboarding-skip" onClick={skip}>{t('Skip for now')}</Button></>}
   </>

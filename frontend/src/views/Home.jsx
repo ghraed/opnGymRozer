@@ -11,6 +11,7 @@ import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 import { bmiFor } from '../lib/bmi.js'
+import { programById } from '../lib/starter.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -27,6 +28,9 @@ export default function Home() {
   const delta = bw && prevBW ? bw.w - prevBW.w : null
   const height = Number(S.onboarding?.height) || null
   const bmi = bw && height ? bmiFor(bw.w, height, S.unit) : null
+  const scheduledPlan = [1, 2, 3, 4, 5, 6, 0].map(day => ({ day, routine: S.routines.find(item => item.id === S.week[day]) })).filter(item => item.routine)
+  const hasScheduledPlan = scheduledPlan.length > 0
+  const onboardingProgram = programById(S.onboarding?.programId)
 
   const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7) + weekOffset * 7)
   const doneDays = new Set(S.workouts.map(w => w.d))
@@ -78,7 +82,7 @@ export default function Home() {
       </div>
     </div>
 
-    {!S.routines.length && !S.active && (
+    {!S.routines.length && !S.active && !user && (
       <div className="card">
         <div className="row" style={{ gap: 10, marginBottom: 6 }}>
           <span className="lrow-i"><Icon name="sparkles" /></span>
@@ -90,22 +94,31 @@ export default function Home() {
       </div>
     )}
 
-    {!S.onboarding?.completedAt && user && (
+    {user && (!S.onboarding?.completedAt || !hasScheduledPlan) && (
       <div className="card">
         <div className="row" style={{ gap: 10, marginBottom: 6 }}>
           <span className="lrow-i"><Icon name="sparkles" /></span>
-          <div className="big" style={{ fontSize: 20 }}>{t('Finish your setup')}</div>
+          <div className="big" style={{ fontSize: 20 }}>{t(S.onboarding?.completedAt ? 'Set up my plan' : 'Finish your setup')}</div>
         </div>
         <div className="muted small" style={{ marginBottom: 12 }}>{t('Answer a few fitness questions and we’ll recommend a plan that fits your goals, schedule and equipment.')}</div>
         <Button variant="primary" icon="sparkles" onClick={() => onboardingSheet()}>{t('Set up my plan')}</Button>
       </div>
     )}
 
-    {S.onboarding?.completedAt && (
-      <div className="card">
-        <div className="row between">
-          <div><div className="small muted">{t('Your focus')}</div><div style={{ fontWeight: 600 }}>{t(S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness')}</div></div>
-          <span className="tag acc">{S.onboarding.days} {t('days/week')}</span>
+    {S.onboarding?.completedAt && hasScheduledPlan && (
+      <div className="card home-plan-card">
+        <div className="row between" style={{ alignItems: 'flex-start' }}>
+          <div>
+            <div className="small muted">{t('Your weekly routine')}</div>
+            <div className="home-plan-name">{t(onboardingProgram?.name || S.onboarding.programId || 'Plan')}</div>
+            <div className="small muted">{t(S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness')}</div>
+          </div>
+          <Button size="sm" variant="tinted" onClick={() => nav('/plan')}>{t('Plan')}</Button>
+        </div>
+        <div className="home-plan-schedule">
+          {scheduledPlan.map(({ day, routine: plannedRoutine }) => <div className="home-plan-day" key={day}>
+            <span>{t(DAYS[day])}</span><strong>{plannedRoutine.name}</strong>
+          </div>)}
         </div>
       </div>
     )}

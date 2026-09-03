@@ -1,5 +1,5 @@
 import { EXDB, EXIDX } from './exercises.js'
-import { buildProgram, programById } from './starter.js'
+import { buildProgram, programById, PROGRAMS } from './starter.js'
 import { todayISO, uid } from './format.js'
 
 export const GOALS = [
@@ -25,13 +25,6 @@ export const EQUIPMENT = [
 // superior. When weekly volume is matched, full-body and split routines perform
 // similarly; this rotation keeps major muscle groups recurring through the week.
 const PROGRAM_FOR_DAYS = { 2: 'full_body', 3: 'full_body', 4: 'upper_lower', 5: 'upper_lower', 6: 'ppl' }
-const PROGRAMS_FOR_DAYS = {
-  2: ['full_body'],
-  3: ['full_body', 'ppl'],
-  4: ['upper_lower', 'full_body'],
-  5: ['upper_lower', 'bro_split'],
-  6: ['ppl', 'upper_lower'],
-}
 const DAYS_FOR_COUNT = {
   2: [1, 4], 3: [1, 3, 5], 4: [1, 2, 4, 5], 5: [1, 2, 3, 4, 5], 6: [1, 2, 3, 4, 5, 6],
 }
@@ -66,15 +59,13 @@ const EQUIPMENT_REPLACEMENTS = {
 
 export function programForDays(days) { return PROGRAM_FOR_DAYS[Math.max(2, Math.min(6, Number(days) || 3))] }
 
-export function compatiblePrograms(days) {
-  return PROGRAMS_FOR_DAYS[Math.max(2, Math.min(6, Number(days) || 3))]
-}
+export function selectablePrograms() { return PROGRAMS.map(program => program.id) }
 
 export function recommendationFor(profile = {}) {
   const days = Math.max(2, Math.min(6, Number(profile.days) || 3))
   const goal = profile.goal || 'fitness'
   const recommendedProgramId = programForDays(days)
-  const programId = compatiblePrograms(days).includes(profile.programId) ? profile.programId : recommendedProgramId
+  const programId = selectablePrograms().includes(profile.programId) ? profile.programId : recommendedProgramId
   const name = programById(programId)?.name || 'Full Body'
   return { days, goal, programId, recommendedProgramId, name, summary: `${days} training days · ${name}` }
 }
@@ -124,13 +115,17 @@ function applyPrescription(entry, profile, index = 0) {
 }
 
 function adaptRoutine(routine, profile) {
-  const maximumExercises = { strength: 6, lose_weight: 5, fitness: 6 }[profile.goal] || Infinity
+  const maximumExercises = exercisesPerSession(profile.goal)
   return {
     ...routine,
     prog: profile.goal === 'muscle' || profile.goal === 'gain_weight' ? 'double' : 'linear',
     ex: routine.ex.slice(0, maximumExercises).map(entry => substitute(entry, profile.equipment || 'full_gym')).filter(Boolean)
       .map((entry, index) => applyPrescription(entry, profile, index)),
   }
+}
+
+function exercisesPerSession(goal) {
+  return { strength: 6, lose_weight: 5, fitness: 6, muscle: 8, gain_weight: 8 }[goal] || 6
 }
 
 function routineFromSpec([name, emoji, ids], profile, program) {
@@ -158,6 +153,36 @@ function addCardioFinisher(routine, profile, index, minutes) {
   return { ...routine, ex: [...routine.ex, cardioRoutine(profile, index, minutes).ex[0]] }
 }
 
+// A chosen split may contain more named workout days than the user's availability (for
+// example, a five-part Bro Split on three days). Merge its routines round-robin and take
+// the highest-priority movement from each source before adding more work. This preserves
+// weekly body-part coverage instead of silently dropping the last routines from the week.
+function fitSplitToAvailableDays(routines, profile, recommendation) {
+  if (routines.length <= recommendation.days) return routines
+  const groups = Array.from({ length: recommendation.days }, () => [])
+  routines.forEach((routine, index) => groups[index % groups.length].push(routine))
+  const limit = exercisesPerSession(profile.goal)
+  const splitName = programById(recommendation.programId)?.name || recommendation.name
+  return groups.map((sources, groupIndex) => {
+    const selected = [], used = new Set()
+    const maximumDepth = Math.max(...sources.map(source => source.ex.length))
+    for (let depth = 0; depth < maximumDepth && selected.length < limit; depth++) {
+      for (const source of sources) {
+        const entry = source.ex[depth]
+        if (entry && !used.has(entry.id)) {
+          selected.push(entry)
+          used.add(entry.id)
+        }
+        if (selected.length >= limit) break
+      }
+    }
+    return {
+      ...sources[0], id: uid(), name: `${splitName} ${groupIndex + 1}`,
+      exerciseFilter: undefined, ex: selected,
+    }
+  })
+}
+
 function buildSelectedRoutines(profile, recommendation) {
   let routines
   if (profile.goal === 'strength' && recommendation.programId === 'full_body') {
@@ -170,6 +195,7 @@ function buildSelectedRoutines(profile, recommendation) {
     const count = recommendation.programId === 'full_body' && recommendation.days === 2 ? 2 : built.routines.length
     routines = built.routines.slice(0, count).map(routine => adaptRoutine(routine, profile))
   }
+  routines = fitSplitToAvailableDays(routines, profile, recommendation)
   if (profile.goal === 'lose_weight' || profile.goal === 'fitness') {
     const minutes = profile.goal === 'lose_weight' ? 30 : 20
     routines = routines.map((routine, index) => addCardioFinisher(routine, profile, index, minutes))
@@ -215,5 +241,9 @@ export function applyOnboarding(state, profile = {}, now = Date.now()) {
   state.targetW = targetWeight
   state.routines.push(...plan.routines)
   state.week = plan.week
+  // Date-specific overrides belong to the schedule they were created against. Keeping an
+  // old "rest" or rescheduled routine here can make the freshly applied plan appear missing
+  // on Home even though the weekly assignments were saved correctly.
+  state.dayPlan = {}
   return plan
 }

@@ -6,6 +6,12 @@ import Icon from './Icon.jsx'
 const BAND_LABELS = {
   underweight: 'Underweight', healthy: 'Healthy range', overweight: 'Overweight', obesity: 'Obesity',
 }
+const BANDS = [
+  { id: 'underweight', range: '< 18.5' },
+  { id: 'healthy', range: '18.5–24.9' },
+  { id: 'overweight', range: '25–29.9' },
+  { id: 'obesity', range: '≥ 30' },
+]
 
 export default function BmiCard({ value, weight, unit, height, onAddHeight }) {
   if (value == null) return (
@@ -33,13 +39,21 @@ export default function BmiCard({ value, weight, unit, height, onAddHeight }) {
     </div>
 
     <div className="bmi-graph" role="img" aria-label={`${t('BMI')} ${fmtNum(value)} — ${label}`}>
-      <div className="bmi-scale">
-        <i className="underweight" /><i className="healthy" /><i className="overweight" /><i className="obesity" />
-        <span className="bmi-marker" style={{ left: `${position}%` }}><b>{fmtNum(value)}</b></span>
+      <div className="bmi-plot">
+        <span className="bmi-marker" style={{ left: `${Math.min(97, Math.max(3, position))}%` }}>
+          <b>{fmtNum(value)}</b><i />
+        </span>
+        <div className="bmi-scale">
+          <i className="underweight" /><i className="healthy" /><i className="overweight" /><i className="obesity" />
+        </div>
+        <div className="bmi-ticks"><span>18.5</span><span>25</span><span>30</span></div>
       </div>
-      <div className="bmi-ticks"><span>18.5</span><span>25</span><span>30</span></div>
       <div className="bmi-legend">
-        <span>{t('Underweight')}</span><span>{t('Healthy range')}</span><span>{t('Overweight')}</span><span>{t('Obesity')}</span>
+        {BANDS.map(item => <div className={`bmi-legend-item${band === item.id ? ' active' : ''}`} key={item.id}>
+          <i className={item.id} />
+          <span><strong>{t(BAND_LABELS[item.id])}</strong><small>{item.range}</small></span>
+          {band === item.id && <Icon name="check" />}
+        </div>)}
       </div>
     </div>
 

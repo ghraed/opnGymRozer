@@ -34,6 +34,8 @@ const hasData = st => !!((st.workouts || []).length || (st.routines || []).lengt
 export const useStore = create((set, get) => {
   let pushTm = null
   let saveTm = null
+  let pushInFlight = null
+  let pushAgain = false
 
   // Mobile build: mirror the state into a file in the app's data directory (survives WebView
   // storage eviction) and keep the native reminder schedule in step with the weekly plan.
@@ -114,21 +116,56 @@ export const useStore = create((set, get) => {
     async pushState() {
       if (!get().user) return
       clearTimeout(pushTm)
-      try {
-        const result = await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: get().S, revisions: get().revisions }) })
-        get().setRevisions(result.revisions)
-        if (result.state) {
-          const active = get().S.active
-          const next = Object.assign(clone(DEF), result.state)
-          if (active) next.active = active
-          persist(next, false)
-        }
-        if (result.conflicts?.includes('plan')) {
-          import('./useUI.js').then(({ useUI }) => useUI.getState().toast('Your trainer updated your plan — the trainer version was applied.'))
-        }
-        localStorage.removeItem('gym_dirty')
+      pushTm = null
+      // Only one state upload may own the response at a time. Previously, two overlapping
+      // saves could complete out of order and the older response would replace a newer local
+      // plan (most visible immediately after onboarding). Queue one latest-state pass instead.
+      if (pushInFlight) {
+        pushAgain = true
+        return pushInFlight
       }
-      catch (e) { localStorage.setItem('gym_dirty', '1') }
+      const run = async () => {
+        do {
+          pushAgain = false
+          const sentState = get().S
+          const sentTimestamp = sentState._ts
+          try {
+            const result = await api('/api/data', { method: 'PUT', body: JSON.stringify({ state: sentState, revisions: get().revisions }) })
+            get().setRevisions(result.revisions)
+            const current = get().S
+            const changedWhileSaving = current._ts !== sentTimestamp
+            const planConflict = result.conflicts?.includes('plan')
+            if (result.state && (!changedWhileSaving || planConflict)) {
+              const active = current.active
+              const next = Object.assign(clone(DEF), result.state)
+              if (active) next.active = active
+              persist(next, false)
+            } else if (changedWhileSaving) {
+              pushAgain = true
+            }
+            if (planConflict) {
+              import('./useUI.js').then(({ useUI }) => useUI.getState().toast('Your trainer updated your plan — the trainer version was applied.'))
+            }
+            localStorage.removeItem('gym_dirty')
+          }
+          catch (e) {
+            localStorage.setItem('gym_dirty', '1')
+            pushAgain = false
+          }
+        } while (pushAgain && get().user)
+      }
+      pushInFlight = run()
+      try {
+        await pushInFlight
+      } finally {
+        pushInFlight = null
+        // A caller may have queued another pass after the loop checked its condition but
+        // before the promise settled. Let the normal method serialize that final update too.
+        if (pushAgain && get().user) {
+          pushAgain = false
+          get().pushState()
+        }
+      }
     },
     async pullState() {
       try {
