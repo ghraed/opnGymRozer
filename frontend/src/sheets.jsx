@@ -20,6 +20,7 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
+import { buildOnboardingProgram } from './lib/onboarding.js'
 import Onboarding from './components/Onboarding.jsx'
 
 const S = () => useStore.getState().S
@@ -51,12 +52,17 @@ function ProgramBuilder({ close }) {
   const [selected, setSelected] = useState(null)
 
   const install = empty => {
-    const built = buildProgram(selected.id, { empty })
+    const personalized = !empty && st.onboarding?.completedAt
+    const built = personalized
+      ? buildOnboardingProgram({ ...st.onboarding, programId: selected.id })
+      : buildProgram(selected.id, { empty })
     update(s => {
       s.routines.push(...built.routines)
       // Choosing a program makes its schedule the active week. Existing routines remain
       // available, but stale day assignments cannot accidentally mix two programs.
       s.week = built.week
+      s.dayPlan = {}
+      if (personalized) s.onboarding.programId = selected.id
     })
     close()
     toast(t(empty ? 'Custom {0} schedule created' : '{0} program loaded', selected.name))

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EXIDX } from './exercises.js'
-import { applyOnboarding, buildOnboardingProgram, selectablePrograms, programForDays } from './onboarding.js'
+import { applyOnboarding, buildOnboardingProgram, isMainLift, selectablePrograms, programForDays } from './onboarding.js'
 import { todayISO } from './format.js'
 
 describe('onboarding recommendations', () => {
@@ -33,15 +33,89 @@ describe('onboarding recommendations', () => {
 
   it('uses the intended goal and experience prescriptions', () => {
     const strength = buildOnboardingProgram({ days: 3, goal: 'strength', experience: 'intermediate' })
-    expect(strength.routines[0].ex[0]).toMatchObject({ sets: 4, reps: 5 })
+    expect(strength.routines[0].ex[0]).toMatchObject({ sets: 3, reps: 5 })
     const beginner = buildOnboardingProgram({ days: 3, goal: 'fitness', experience: 'beginner' })
-    expect(beginner.routines[0].ex[0]).toMatchObject({ sets: 2, reps: 10 })
+    expect(beginner.routines[0].ex[0]).toMatchObject({ sets: 2, reps: 8 })
     const muscle = buildOnboardingProgram({ days: 3, goal: 'muscle', experience: 'intermediate' })
     expect(muscle.routines[0].ex[0]).toMatchObject({ sets: 3, reps: 8 })
+    const beginnerMuscle = buildOnboardingProgram({ days: 4, programId: 'upper_lower', goal: 'muscle', experience: 'beginner', equipment: 'full_gym' })
+    const upperA = beginnerMuscle.routines.find(routine => routine.name === 'Upper A')
+    expect(upperA.ex.slice(0, 4).every(entry => entry.sets === 3 && entry.reps === 8)).toBe(true)
+    expect(upperA.ex.slice(4).every(entry => entry.sets === 2 && entry.reps === 12)).toBe(true)
+    const directChestSets = beginnerMuscle.routines.flatMap(routine => routine.ex)
+      .filter(entry => EXIDX[entry.id]?.tg === 'pectorals')
+      .reduce((total, entry) => total + entry.sets, 0)
+    expect(directChestSets).toBeGreaterThanOrEqual(10)
     expect(muscle.programId).toBe(strength.programId)
     expect(muscle.routines[0].name).not.toBe(strength.routines[0].name)
     expect(muscle.routines[0].prog).toBe('double')
     expect(strength.routines[0].prog).toBe('linear')
+  })
+
+  it('applies role-specific evidence ranges across every goal, experience and split', () => {
+    const daysForSplit = { full_body: 3, upper_lower: 4, ppl: 6, bro_split: 5 }
+    for (const goal of ['muscle', 'strength', 'lose_weight', 'fitness']) {
+      for (const experience of ['beginner', 'intermediate', 'advanced']) {
+        for (const [programId, days] of Object.entries(daysForSplit)) {
+          const plan = buildOnboardingProgram({ days, programId, goal, experience, equipment: 'full_gym' })
+          plan.routines.forEach(routine => routine.ex.filter(entry => entry.mode !== 'cardio').forEach((entry, index) => {
+            const mainLift = index < 4 && isMainLift(entry.id)
+            if (goal === 'strength') {
+              expect(entry, `${programId}: ${experience}: ${EXIDX[entry.id]?.n}`).toMatchObject({
+                sets: mainLift ? 3 : experience === 'advanced' ? 3 : 2,
+                reps: mainLift ? 5 : 8,
+              })
+            } else if (goal === 'muscle') {
+              expect(entry, `${programId}: ${experience}: ${EXIDX[entry.id]?.n}`).toMatchObject({
+                sets: mainLift ? (experience === 'advanced' ? 4 : 3) : (experience === 'advanced' ? 3 : 2),
+                reps: mainLift ? 8 : 12,
+                repsMin: mainLift ? 6 : 10,
+              })
+            } else {
+              expect(entry, `${programId}: ${experience}: ${EXIDX[entry.id]?.n}`).toMatchObject({
+                sets: mainLift && experience !== 'beginner' ? 3 : 2,
+                reps: mainLift ? 8 : 12,
+              })
+            }
+          }))
+        }
+      }
+    }
+  })
+
+  it('keeps every offered plan inside the audited prescription bounds', () => {
+    for (const goal of ['muscle', 'strength', 'lose_weight', 'fitness']) {
+      for (const experience of ['beginner', 'intermediate', 'advanced']) {
+        for (const programId of selectablePrograms()) {
+          for (let days = 2; days <= 6; days++) {
+            for (const equipment of ['full_gym', 'dumbbells', 'bodyweight']) {
+              const plan = buildOnboardingProgram({ goal, experience, programId, days, equipment })
+              expect(Object.keys(plan.week)).toHaveLength(days)
+              plan.routines.forEach(routine => {
+                const resistance = routine.ex.filter(entry => entry.mode !== 'cardio')
+                expect(new Set(resistance.map(entry => entry.id)).size, `${goal}: ${experience}: ${programId}: ${days}d: ${equipment}: ${routine.name}`).toBe(resistance.length)
+                resistance.forEach(entry => {
+                  if (goal === 'strength') {
+                    expect([5, 8]).toContain(entry.reps)
+                    expect(entry.sets).toBeGreaterThanOrEqual(2)
+                    expect(entry.sets).toBeLessThanOrEqual(3)
+                  } else if (goal === 'muscle') {
+                    expect([8, 12]).toContain(entry.reps)
+                    expect([6, 10]).toContain(entry.repsMin)
+                    expect(entry.sets).toBeGreaterThanOrEqual(2)
+                    expect(entry.sets).toBeLessThanOrEqual(4)
+                  } else {
+                    expect([8, 12]).toContain(entry.reps)
+                    expect(entry.sets).toBeGreaterThanOrEqual(2)
+                    expect(entry.sets).toBeLessThanOrEqual(3)
+                  }
+                })
+              })
+            }
+          }
+        }
+      }
+    }
   })
 
   it('lets the user override the recommended split and rebuilds exercises for the goal', () => {
@@ -54,7 +128,7 @@ describe('onboarding recommendations', () => {
     expect(broMuscle.routines).toHaveLength(5)
     expect(Object.keys(broMuscle.week)).toHaveLength(5)
     expect(broMuscle.routines[0].ex.length).toBeGreaterThan(broFatLoss.routines[0].ex.filter(entry => entry.mode !== 'cardio').length)
-    expect(broFatLoss.routines[0].ex[0]).toMatchObject({ sets: 2, reps: 10 })
+    expect(broFatLoss.routines[0].ex[0]).toMatchObject({ sets: 2, reps: 8 })
 
     const adapted = buildOnboardingProgram({ days: 3, programId: 'bro_split', goal: 'muscle' })
     expect(adapted.programId).toBe('bro_split')

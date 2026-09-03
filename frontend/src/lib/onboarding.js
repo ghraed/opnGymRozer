@@ -44,6 +44,20 @@ const STRENGTH_UPPER_LOWER = [
   ['Lower Strength B', 'legs', ['0032', '0739', '0410', '0586', '0605', '0687']],
 ]
 
+// The prescription must follow the movement, not its position in a routine. The old
+// "first four" shortcut accidentally treated exercises such as leg extensions, lateral
+// raises and curls as heavy five-rep lifts in some splits. These are the multi-joint
+// movements eligible for the main-lift prescription; at most the first four receive it so
+// a full-body session does not turn every compound into another heavy main lift.
+const MAIN_LIFT_IDS = new Set([
+  '0025', '0047', '0251', '0577', // horizontal presses and dips
+  '0027', '1323', '2330', '0652', // rows and vertical pulls
+  '0426', '0405',                 // overhead presses
+  '0043', '0032', '0085', '0410', '0739', // squat, hinge and leg-press patterns
+])
+
+export function isMainLift(id) { return MAIN_LIFT_IDS.has(id) }
+
 const EQUIPMENT_REPLACEMENTS = {
   dumbbells: {
     '0025': '0289', '0047': '0314', '0027': '0293', '0032': '0300', '0043': '1760',
@@ -78,49 +92,53 @@ function equipmentAllows(exercise, equipment) {
 
 // Substitute only with a movement for the same primary target/body part. This keeps an
 // equipment-constrained plan recognisably equivalent to its full-gym template.
-function substitute(entry, equipment) {
+function substitute(entry, equipment, used = new Set()) {
   const source = EXIDX[entry.id]
-  if (!source || equipmentAllows(source, equipment)) return entry
+  if (!source || (equipmentAllows(source, equipment) && !used.has(entry.id))) return entry
   const preferred = EQUIPMENT_REPLACEMENTS[equipment]?.[entry.id]
-  if (preferred && EXIDX[preferred]) return { ...entry, id: preferred }
+  if (preferred && EXIDX[preferred] && !used.has(preferred)) return { ...entry, id: preferred }
   const candidates = EXDB.filter(ex => equipmentAllows(ex, equipment) && ex.bp === source.bp && ex.bp !== 'cardio'
-    && !/stretch|yoga|circle|toe touch/i.test(ex.n))
+    && !used.has(ex.id) && !/stretch|yoga|circle|toe touch/i.test(ex.n))
   const replacement = candidates.find(ex => ex.tg === source.tg) || candidates[0]
   return replacement ? { ...entry, id: replacement.id } : null
 }
 
-function applyPrescription(entry, profile, index = 0) {
+function applyPrescription(entry, profile, mainLift = false) {
   if (entry.mode === 'cardio') return entry
   const goal = profile.goal || 'fitness'
   const experience = profile.experience || 'beginner'
   const next = { ...entry }
   if (goal === 'strength') {
-    const primary = index < 4
-    next.sets = primary ? (experience === 'beginner' ? 3 : 4) : (experience === 'advanced' ? 3 : 2)
-    next.reps = primary ? 5 : 8
+    next.sets = mainLift ? 3 : (experience === 'advanced' ? 3 : 2)
+    next.reps = mainLift ? 5 : 8
   } else if (goal === 'muscle' || goal === 'gain_weight') {
-    const primary = index < 4
-    next.sets = primary
-      ? (experience === 'advanced' ? 4 : experience === 'beginner' ? 2 : 3)
+    next.sets = mainLift
+      ? (experience === 'advanced' ? 4 : 3)
       : (experience === 'advanced' ? 3 : 2)
-    next.reps = primary ? 8 : 12
+    next.reps = mainLift ? 8 : 12
+    next.repsMin = mainLift ? 6 : 10
   } else if (goal === 'lose_weight') {
-    next.sets = experience === 'beginner' ? 2 : 3
-    next.reps = 10
+    next.sets = mainLift && experience !== 'beginner' ? 3 : 2
+    next.reps = mainLift ? 8 : 12
   } else {
-    next.sets = experience === 'beginner' ? 2 : 3
-    next.reps = 10
+    next.sets = mainLift && experience !== 'beginner' ? 3 : 2
+    next.reps = mainLift ? 8 : 12
   }
   return next
 }
 
 function adaptRoutine(routine, profile) {
   const maximumExercises = exercisesPerSession(profile.goal)
+  const used = new Set()
   return {
     ...routine,
     prog: profile.goal === 'muscle' || profile.goal === 'gain_weight' ? 'double' : 'linear',
-    ex: routine.ex.slice(0, maximumExercises).map(entry => substitute(entry, profile.equipment || 'full_gym')).filter(Boolean)
-      .map((entry, index) => applyPrescription(entry, profile, index)),
+    ex: routine.ex.slice(0, maximumExercises).map((entry, index) => {
+      const replacement = substitute(entry, profile.equipment || 'full_gym', used)
+      if (!replacement) return null
+      used.add(replacement.id)
+      return applyPrescription(replacement, profile, index < 4 && isMainLift(entry.id))
+    }).filter(Boolean),
   }
 }
 

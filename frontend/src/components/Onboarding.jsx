@@ -132,7 +132,8 @@ export default function Onboarding({ close, allowSkip = true }) {
               <strong>{t(routine.name)}</strong>
               <span>{exercises.slice(0, 4).map(entry => {
                 const name = EXIDX[entry.id]?.n
-                return name ? `${name} — ${entry.sets}×${entry.reps}` : null
+                const reps = entry.repsMin > 0 && entry.repsMin < entry.reps ? `${entry.repsMin}–${entry.reps}` : entry.reps
+                return name ? `${name} — ${entry.sets}×${reps}` : null
               }).filter(Boolean).join(' · ')}</span>
               {exercises.length > 4 && <small>{t('+{0} more', exercises.length - 4)}</small>}
             </div>
@@ -141,6 +142,9 @@ export default function Onboarding({ close, allowSkip = true }) {
         {profile.goal === 'lose_weight' && profile.targetWeight > 0 && <div className="recommendation-target">
           <Icon name="target" />{t('Weight target: {0} → {1} {2}', profile.currentWeight, profile.targetWeight, st.unit)}
         </div>}
+        <div className="recommendation-guidance">
+          {t('Use a weight that makes the final repetitions challenging; reaching complete failure is not required.')}
+        </div>
         {plan.evidence.additionalCardioMinutes > 0 && <div className="recommendation-guidance">
           {t('For general health, add {0} minutes of moderate aerobic activity across the week.', plan.evidence.additionalCardioMinutes)}
         </div>}

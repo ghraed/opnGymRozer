@@ -614,4 +614,6 @@ export default {
   'Recommended': 'موصى به',
   'Exercises selected for your goal': 'التمارين المختارة لهدفك',
   '+{0} more': '+{0} تمارين إضافية',
+  'Keep your goal in sight: {0}.': 'لا تغفل عن هدفك: {0}.',
+  'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.': 'استخدم وزناً يجعل التكرارات الأخيرة صعبة؛ لا يلزم الوصول إلى الفشل العضلي الكامل.',
 }

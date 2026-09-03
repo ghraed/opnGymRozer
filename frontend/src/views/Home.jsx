@@ -13,6 +13,11 @@ import { glyphOf } from '../lib/glyphs.js'
 import { bmiFor } from '../lib/bmi.js'
 import { programById } from '../lib/starter.js'
 
+const goalLabel = goal => goal === 'muscle' ? 'Build muscle'
+  : goal === 'strength' ? 'Build strength'
+    : goal === 'lose_weight' ? 'Lose weight'
+      : goal === 'gain_weight' ? 'Gain weight' : 'General fitness'
+
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
   const nav = useNavigate()
@@ -55,7 +60,13 @@ export default function Home() {
 
   return <div className="narrow">
     <div className="hdr">
-      <div><h1>{user ? t('Hi {0}', user.name) : 'ROZER'}</h1><div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
+      <div className="home-heading">
+        <h1>{user ? t('Hi {0}', user.name) : 'ROZER'}</h1>
+        {user && S.onboarding?.completedAt && <div className="home-goal-reminder">
+          <Icon name="target" /><span>{t('Keep your goal in sight: {0}.', t(goalLabel(S.onboarding.goal)))}</span>
+        </div>}
+        <div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+      </div>
       <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
     </div>
 
@@ -111,7 +122,7 @@ export default function Home() {
           <div>
             <div className="small muted">{t('Your weekly routine')}</div>
             <div className="home-plan-name">{t(onboardingProgram?.name || S.onboarding.programId || 'Plan')}</div>
-            <div className="small muted">{t(S.onboarding.goal === 'muscle' ? 'Build muscle' : S.onboarding.goal === 'strength' ? 'Build strength' : S.onboarding.goal === 'lose_weight' ? 'Lose weight' : S.onboarding.goal === 'gain_weight' ? 'Gain weight' : 'General fitness')}</div>
+            <div className="small muted">{t(goalLabel(S.onboarding.goal))}</div>
           </div>
           <Button size="sm" variant="tinted" onClick={() => nav('/plan')}>{t('Plan')}</Button>
         </div>
