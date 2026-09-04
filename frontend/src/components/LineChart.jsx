@@ -9,10 +9,10 @@ const W = 340   // viewBox width; the svg stretches to its container, height com
 //        more of it). Used for effort on the weight curve, where the two belong on one line:
 //        the same weight with less left in the tank is not the same session.
 //   note extra text for that point's tooltip.
-// opts: { h, unit, color, axes, goal, invert }
+// opts: { h, unit, color, axes, goal, invert, minY, maxY, yStep }
 //   invert flips the y axis, for a scale that counts down as it gets harder (RIR). Without it
 //   a curve of reps-in-reserve reads upside down, with the hardest sets at the floor.
-export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false }) {
+export default function LineChart({ points, h = 150, unit = '', color = 'var(--acc)', axes = true, goal = null, invert = false, minY = null, maxY = null, yStep = null }) {
   const svgRef = useRef(null)
   const wrapRef = useRef(null)
   const tipRef = useRef(null)
@@ -45,8 +45,18 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   const ys = pts.map(p => p.y)
   let ymin = Math.min(...ys), ymax = Math.max(...ys)
   if (goal != null && isFinite(goal)) { ymin = Math.min(ymin, goal); ymax = Math.max(ymax, goal) }
-  if (ymin === ymax) { ymin -= 1; ymax += 1 }
-  const pad = (ymax - ymin) * 0.12; ymin -= pad; ymax += pad
+  const hasMinY = minY != null && isFinite(minY)
+  const hasMaxY = maxY != null && isFinite(maxY)
+  if (hasMinY) ymin = Number(minY)
+  if (hasMaxY) ymax = Number(maxY)
+  if (ymax <= ymin) {
+    if (hasMinY) ymax = ymin + 1
+    else if (hasMaxY) ymin = ymax - 1
+    else { ymin -= 1; ymax += 1 }
+  }
+  const pad = (ymax - ymin) * 0.12
+  if (!hasMinY) ymin -= pad
+  if (!hasMaxY) ymax += pad
   const t0 = pts[0].t, t1 = pts[pts.length - 1].t || t0 + 1
   const X = t => (t1 === t0 ? (P.l + W - P.r) / 2 : P.l + (t - t0) / (t1 - t0) * (W - P.l - P.r))
   const Y = y => {
@@ -58,8 +68,10 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
   if (axes) {
     const range = ymax - ymin, raw = range / 3
     const pow = Math.pow(10, Math.floor(Math.log10(raw)))
-    let step = 10 * pow
-    for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * pow) { step = m * pow; break }
+    let step = yStep != null && isFinite(yStep) && Number(yStep) > 0 ? Number(yStep) : 10 * pow
+    if (!(yStep != null && isFinite(yStep) && Number(yStep) > 0)) {
+      for (const m of [1, 2, 2.5, 5, 10]) if (raw <= m * pow) { step = m * pow; break }
+    }
     for (let v = Math.ceil(ymin / step) * step; v <= ymax + 1e-9; v += step) {
       const y = Y(v)
       gridlines.push(<g key={'y' + v}>
