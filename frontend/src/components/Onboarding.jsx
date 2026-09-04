@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
@@ -26,9 +26,9 @@ export default function Onboarding({ close, allowSkip = true }) {
   const previous = st.onboarding || {}
   const latestWeight = st.bodyweight[st.bodyweight.length - 1]?.w || null
   const initialDays = previous.days || 3
-  // New/returning users should start from the live recommendation. If a user explicitly
-  // chooses a split, that choice takes over and remains until they change it again.
-  const initialProgramId = selectablePrograms().includes(previous.programId) ? previous.programId : null
+  // Always start from the live recommendation. A split only becomes user-chosen
+  // after an explicit button click on the recommendation step.
+  const initialProgramId = null
   const [profile, setProfile] = useState({
     goal: previous.goal === 'gain_weight' ? 'muscle' : previous.goal || 'muscle', currentWeight: previous.currentWeight || latestWeight || null,
     height: previous.height || null,
@@ -36,19 +36,16 @@ export default function Onboarding({ close, allowSkip = true }) {
     experience: previous.experience || 'beginner', equipment: previous.equipment || 'full_gym',
     body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
   })
-  const [hasManualSplit, setHasManualSplit] = useState(false)
   const [confirmReplace, setConfirmReplace] = useState(false)
-  const plan = useMemo(() => buildOnboardingProgram(profile), [profile])
+  const [hasManualSplit, setHasManualSplit] = useState(false)
+  const profileForPlan = useMemo(() => ({
+    ...profile,
+    ...(hasManualSplit ? { programId: profile.programId } : { programId: undefined }),
+  }), [hasManualSplit, profile])
+  const plan = useMemo(() => buildOnboardingProgram(profileForPlan), [profileForPlan])
   const profileBmi = bmiFor(profile.currentWeight, profile.height, st.unit)
   const hasExistingSchedule = Object.values(st.week || {}).some(Boolean)
   const set = values => setProfile(current => ({ ...current, ...values }))
-  // Keep the recommendation authoritative until the user explicitly chooses a split.
-  useEffect(() => {
-    if (hasManualSplit) return
-    if (profile.programId !== plan.recommendedProgramId) {
-      set({ programId: plan.recommendedProgramId })
-    }
-  }, [hasManualSplit, profile.programId, plan.recommendedProgramId])
 
   const next = () => {
     if (step === 0 && !(Number(profile.currentWeight) > 0)) {
