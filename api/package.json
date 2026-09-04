@@ -11,6 +11,7 @@
     "db:import-json": "node scripts/import-json.js",
     "db:seed-trainer": "node scripts/seed-trainer.js",
     "db:seed-sample-users": "node scripts/seed-sample-users.js",
+    "db:reset-sample-users": "node scripts/reset-sample-users.js",
     "test": "node --test"
   },
   "dependencies": {

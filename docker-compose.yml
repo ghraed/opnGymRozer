@@ -70,6 +70,17 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  seed-reset-sample-users:
+    profiles: ["tools"]
+    build: ./api
+    command: npm run db:reset-sample-users
+    environment:
+      <<: *db-environment
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   # One-time: download the exercise images + GIFs into ./media (skipped if already there).
   # ~140 MB, from github.com/hasaneyldrm/exercises-dataset (CC).
   media:

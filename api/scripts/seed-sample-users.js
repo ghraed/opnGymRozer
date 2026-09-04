@@ -59,21 +59,28 @@ const rng = seed => () => {
   return seed / 4294967296
 }
 
-function planFor(index) {
+function planFor(index, bodyWeight) {
   const id = suffix => `seed-${index}-${suffix}`
+  // Plan prescriptions need a starting load as well as the completed workout
+  // history; otherwise the trainer editor displays an empty weight field.
+  const weighted = entries => entries.map(entry => ({
+    ...entry,
+    mode: 'reps',
+    weight: round(Math.max(2.5, (exerciseBase[entry.id] || 20) * (bodyWeight > 80 ? 1.12 : bodyWeight < 60 ? .76 : 1))),
+  }))
   if (index % 3 === 0) {
-    const a = { id: id('full-a'), name: 'Full Body A', emoji: 'dumbbell', prog: 'linear', ex: fullBody }
-    const b = { id: id('full-b'), name: 'Full Body B', emoji: 'figureStrength', prog: 'linear', ex: fullBody.map((e, i) => ({ ...e, reps: e.reps + (i % 2) })) }
+    const a = { id: id('full-a'), name: 'Full Body A', emoji: 'dumbbell', prog: 'linear', ex: weighted(fullBody) }
+    const b = { id: id('full-b'), name: 'Full Body B', emoji: 'figureStrength', prog: 'linear', ex: weighted(fullBody.map((e, i) => ({ ...e, reps: e.reps + (i % 2) }))) }
     return { routines: [a, b], week: { 1: a.id, 3: b.id, 5: a.id } }
   }
   if (index % 3 === 1) {
-    const u = { id: id('upper'), name: 'Upper', emoji: 'arm', prog: 'linear', ex: upper }
-    const l = { id: id('lower'), name: 'Lower', emoji: 'legs', prog: 'linear', ex: lower }
+    const u = { id: id('upper'), name: 'Upper', emoji: 'arm', prog: 'linear', ex: weighted(upper) }
+    const l = { id: id('lower'), name: 'Lower', emoji: 'legs', prog: 'linear', ex: weighted(lower) }
     return { routines: [u, l], week: { 1: u.id, 2: l.id, 4: u.id, 5: l.id } }
   }
-  const p = { id: id('push'), name: 'Push', emoji: 'dumbbell', prog: 'linear', ex: push }
-  const q = { id: id('pull'), name: 'Pull', emoji: 'pullup', prog: 'linear', ex: pull }
-  const l = { id: id('legs'), name: 'Legs', emoji: 'legs', prog: 'linear', ex: legs }
+  const p = { id: id('push'), name: 'Push', emoji: 'dumbbell', prog: 'linear', ex: weighted(push) }
+  const q = { id: id('pull'), name: 'Pull', emoji: 'pullup', prog: 'linear', ex: weighted(pull) }
+  const l = { id: id('legs'), name: 'Legs', emoji: 'legs', prog: 'linear', ex: weighted(legs) }
   return { routines: [p, q, l], week: { 1: p.id, 3: q.id, 5: l.id } }
 }
 
@@ -122,12 +129,18 @@ const conn = await pool.getConnection()
 let created = 0, skipped = 0
 try {
   await conn.beginTransaction()
+  if (process.env.SEED_RESET_SAMPLE_USERS === '1') {
+    // Restrict deletion to this seeder's reserved address domain. Foreign-key
+    // cascades remove their client states, never anyone else's data.
+    const [result] = await conn.execute('DELETE FROM users WHERE email LIKE ?', ['%@seed.opengym.local'])
+    console.log(`Removed ${result.affectedRows} prior sample users.`)
+  }
   for (let index = 0; index < people.length; index++) {
     const [name, body, goal, startWeight, targetW] = people[index]
     const email = `sample${String(index + 1).padStart(2, '0')}@seed.opengym.local`
     const [existing] = await conn.execute('SELECT id FROM users WHERE email=? FOR UPDATE', [email])
     if (existing.length) { skipped++; continue }
-    const plan = planFor(index)
+    const plan = planFor(index, startWeight)
     const progress = workoutHistory(index, startWeight, targetW, plan)
     const id = `seed-user-${String(index + 1).padStart(2, '0')}`
     const createdAt = addDays(new Date(), -90 - index * 3)
