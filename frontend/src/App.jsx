@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
@@ -35,12 +35,58 @@ function applyPrefs(theme, accent) {
   if (meta) meta.content = de.dataset.theme === 'light' ? '#f2f2f7' : '#000000'
 }
 
+// A sheet is an in-page state, just like the Android/iOS back affordance expects.
+// Give each open sheet a same-URL history entry: Back then dismisses the top sheet
+// before HashRouter gets a chance to leave the current screen.
+function useSheetBackNavigation() {
+  const sheets = useUI(s => s.sheets)
+  const previous = useRef(sheets.length)
+  const closedByBack = useRef(false)
+  const ignoreProgrammaticBack = useRef(false)
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (ignoreProgrammaticBack.current) {
+        ignoreProgrammaticBack.current = false
+        return
+      }
+      const open = useUI.getState().sheets
+      if (!open.length) return
+      closedByBack.current = true
+      useUI.getState().closeSheet(open[open.length - 1].id)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
+
+  useEffect(() => {
+    const before = previous.current
+    const change = sheets.length - before
+    if (change > 0) {
+      // Sheets normally open one at a time, but support a caller opening several in
+      // the same render as well.
+      for (let i = 0; i < change; i++) {
+        const sheet = sheets[before + i]
+        window.history.pushState({ ...(window.history.state || {}), openGymSheet: sheet.id }, '', window.location.href)
+      }
+    } else if (change < 0 && !closedByBack.current && window.history.state?.openGymSheet) {
+      // Closing through a button, a backdrop tap, or a swipe must discard the entry
+      // we created. Ignore its popstate so it cannot dismiss the sheet underneath.
+      ignoreProgrammaticBack.current = true
+      window.history.go(change)
+    }
+    closedByBack.current = false
+    previous.current = sheets.length
+  }, [sheets])
+}
+
 function Shell() {
   const navigate = useNavigate()
   const loc = useLocation()
   const { S, user, ready } = useStore()
   const isGuest = useStore(s => s.isGuest())
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
+  useSheetBackNavigation()
   useEffect(() => { setNav(navigate) }, [navigate])
   useEffect(() => { applyPrefs(S.theme, S.accent) }, [S.theme, S.accent])
   useEffect(() => { setLang(S.lang || 'en') }, [S.lang])
