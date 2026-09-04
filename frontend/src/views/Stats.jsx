@@ -18,9 +18,12 @@ import {
 } from '../lib/effort.js'
 import { Button, Segmented, SelectRow } from '../components/ui.jsx'
 
+const SHOW_EFFORT_UI = false
+const stripEffortLabel = txt => (txt || '').replace(/\s+\((?:RIR|RPE)\s+[^)]+\)$/, '')
+
 // Which muscles the training in a window actually hit — and, the point of the card,
 // which ones it keeps missing. Shading is relative within the window (lib/muscles.js).
-function MuscleBalance({ S }) {
+function MuscleBalance({ S, useEffort }) {
   const [win, setWin] = useState(7)
   const [hard, setHard] = useState(false)
   const [sel, setSel] = useState(null)
@@ -33,7 +36,7 @@ function MuscleBalance({ S }) {
   // into "where did the stimulus go" — a muscle can lead on sets and still never be trained
   // hard. Offered only when the window holds ratings at all, since with none the hard map
   // would just be empty and read as "you trained nothing".
-  const rated = inWin.some(w => w.entries.some(e => e.sets.some(s => s.done && isHardSet(s))))
+  const rated = useEffort && inWin.some(w => w.entries.some(e => e.sets.some(s => s.done && isHardSet(s))))
   const on = hard && rated
   const load = loadOfWorkouts(inWin, on ? isHardSet : null)
   const { worked, missed } = rankOf(load)
@@ -137,7 +140,7 @@ export default function Stats() {
   const [exId, setExId] = useState(null)
   const [exMetric, setExMetric] = useState('top')
   const now = Date.now()
-  const anyEffort = hasEffort(S)
+  const anyEffort = SHOW_EFFORT_UI && hasEffort(S)
   const kind = displayScale(S)
   const hd = scaleName(kind)
 
@@ -176,23 +179,21 @@ export default function Stats() {
   const e1Pts = curEx ? e1rmSeries(S, curEx) : []
   const e1Best = curEx ? best1RM(S, curEx) : null
   const showE1 = e1Pts.length > 0
-  // Effort on this exercise, per session. It rides on the top-set curve as well as having a
-  // curve of its own, because the two only mean something together: the same weight moved
-  // with more left in the tank is progress a weight-only chart draws as a flat line.
-  const exRir = exPts.map(p => avgRir(p.sets))
-  const showEff = exRir.filter(v => v != null).length >= 3
-  const effPts = exPts.map((p, i) => (exRir[i] == null ? null : { t: p.t, y: toScale(kind, exRir[i]), d: p.d })).filter(Boolean)
+  // Effort on this exercise, per session is hidden for now.
+  const exRir = SHOW_EFFORT_UI ? exPts.map(p => avgRir(p.sets)) : []
+  const showEff = SHOW_EFFORT_UI && exRir.filter(v => v != null).length >= 3
+  const effPts = SHOW_EFFORT_UI ? exPts.map((p, i) => (exRir[i] == null ? null : { t: p.t, y: toScale(kind, exRir[i]), d: p.d })).filter(Boolean) : []
   const onE1 = showE1 && exMetric === 'e1rm'
   const onEff = showEff && exMetric === 'effort'
   const topPts = exPts.map((p, i) => ({
     t: p.t, y: p.y, d: p.d,
     // 0 RIR (nothing left) is a full dot, 4+ a faint one; unrated sessions keep the plain line.
-    m: exRir[i] == null ? null : 1 - Math.min(4, Math.max(0, exRir[i])) / 4,
-    note: exRir[i] == null ? undefined : hd + ' ' + fmtNum(toScale(kind, exRir[i]))
+    m: SHOW_EFFORT_UI && exRir[i] != null ? 1 - Math.min(4, Math.max(0, exRir[i])) / 4 : null,
+    note: !SHOW_EFFORT_UI || exRir[i] == null ? undefined : hd + ' ' + fmtNum(toScale(kind, exRir[i]))
   }))
   const exOpts = [{ value: 'top', label: t('Top set') }]
   if (showE1) exOpts.push({ value: 'e1rm', label: t('Est. 1RM') })
-  if (showEff) exOpts.push({ value: 'effort', label: t('Effort') })
+  if (SHOW_EFFORT_UI && showEff) exOpts.push({ value: 'effort', label: t('Effort') })
 
   return <>
     <div className="hdr"><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
@@ -210,8 +211,8 @@ export default function Stats() {
       <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
 
-    {S.workouts.length > 0 && <MuscleBalance S={S} />}
-    {anyEffort && <EffortCard S={S} />}
+    {S.workouts.length > 0 && <MuscleBalance S={S} useEffort={SHOW_EFFORT_UI} />}
+    {SHOW_EFFORT_UI && anyEffort && <EffortCard S={S} />}
 
     <div className="cols">
       <div className="card">
@@ -241,7 +242,9 @@ export default function Stats() {
               : <LineChart points={onE1 ? e1Pts.map(p => ({ t: p.t, y: p.y, d: p.d })) : topPts} h={150} unit={exUnit} color="var(--blue)" />}
           </div>
           <div style={{ marginTop: 8 }}>{exList.map((p, i) => <div key={i} className="row between small" style={{ padding: '6px 0', borderBottom: 'var(--hair) solid var(--sep)' }}>
-            <span className="muted">{fmtDate(p.d, true)}</span><span>{p.sets.map(s => setLabel(curEx, s, p.target)).join('  ')}</span></div>)}</div>
+            <span className="muted">{fmtDate(p.d, true)}</span>
+            <span>{p.sets.map(s => stripEffortLabel(setLabel(curEx, s, p.target))).join('  ')}</span>
+          </div>)}</div>
           <div className="small dim" style={{ marginTop: 8 }}>
             {onEff ? t('Average effort per workout') : onE1 ? t('Estimated 1RM per workout') : curCardio ? t('Top speed per workout') : curTimed ? t('Longest hold per workout') : t('Best set weight per workout')}
             {onEff ? '' : <> · {t('Best:')}{' '}<b className="accent">{fmtNum(onE1 ? e1Best.est : exBest)} {onE1 ? S.unit : exUnit}</b></>}
