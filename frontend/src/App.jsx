@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
@@ -80,6 +80,74 @@ function useSheetBackNavigation() {
   }, [sheets])
 }
 
+// Native-like pull to refresh for the phone layout. It only begins at the top of the
+// page and never competes with an open sheet or a scrolling list inside one.
+function PullToRefresh() {
+  const sheets = useUI(s => s.sheets)
+  const [distance, setDistance] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const gesture = useRef({ startY: 0, active: false, distance: 0 })
+
+  useEffect(() => {
+    const isPhone = () => window.matchMedia?.('(pointer: coarse)').matches
+    const onStart = e => {
+      if (loading || sheets.length || !isPhone() || window.scrollY > 0 || e.touches.length !== 1) return
+      gesture.current = { startY: e.touches[0].clientY, active: true, distance: 0 }
+    }
+    const onMove = e => {
+      const g = gesture.current
+      if (!g.active) return
+      const moved = Math.max(0, e.touches[0].clientY - g.startY)
+      if (!moved) return
+      e.preventDefault()
+      g.distance = Math.min(104, moved * 0.48)
+      setDistance(g.distance)
+    }
+    const onEnd = () => {
+      const g = gesture.current
+      if (!g.active) return
+      g.active = false
+      if (g.distance < 68) { setDistance(0); return }
+      const refresh = async () => {
+        if (useStore.getState().hasUnsavedChanges() && !window.confirm('Some changes have not been saved to your account yet. Refresh anyway?')) {
+          setDistance(0)
+          return
+        }
+        setLoading(true)
+        // pullState uploads a newer local copy before accepting a newer server copy,
+        // so refresh cannot silently replace the user’s latest workout or plan edit.
+        await Promise.race([
+          useStore.getState().pullState(),
+          new Promise(resolve => window.setTimeout(resolve, 10000)),
+        ])
+        window.location.reload()
+      }
+      refresh()
+    }
+    const onCancel = () => {
+      gesture.current.active = false
+      gesture.current.distance = 0
+      setDistance(0)
+    }
+    window.addEventListener('touchstart', onStart, { passive: true })
+    window.addEventListener('touchmove', onMove, { passive: false })
+    window.addEventListener('touchend', onEnd, { passive: true })
+    window.addEventListener('touchcancel', onCancel, { passive: true })
+    return () => {
+      window.removeEventListener('touchstart', onStart)
+      window.removeEventListener('touchmove', onMove)
+      window.removeEventListener('touchend', onEnd)
+      window.removeEventListener('touchcancel', onCancel)
+    }
+  }, [loading, sheets.length])
+
+  const visible = loading || distance > 0
+  return <div className={'pull-refresh' + (loading ? ' loading' : '')} aria-hidden={!visible}
+    style={{ transform: `translate(-50%, ${loading ? 14 : -42 + distance}px)`, opacity: visible ? 1 : 0 }}>
+    <span />
+  </div>
+}
+
 function Shell() {
   const navigate = useNavigate()
   const loc = useLocation()
@@ -133,6 +201,7 @@ function Shell() {
       </div>
       <TabBar onStart={startFlow} />
       <RestTimer />
+      <PullToRefresh />
       <Modals />
       <Toast />
     </>

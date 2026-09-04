@@ -9,7 +9,7 @@ const KEY = 'gym_state_v1'
 const REV_KEY = 'gym_state_revisions_v1'
 export const DEF = {
   unit: 'kg', restSec: 90, sound: true, keepAwake: true, lang: 'en',
-  theme: 'dark', accent: 'lime', body: 'male', targetW: null,
+  theme: 'light', accent: 'lime', body: 'male', targetW: null,
   onboarding: null,
   bodyweight: [], routines: [], week: {}, dayPlan: {},
   exWeights: {}, workouts: [], active: null, customEx: [], gifSize: 'full',
@@ -103,6 +103,13 @@ export const useStore = create((set, get) => {
       persist(S, push)
     },
     replaceState(S, push = false) { persist(clone(S), push) },
+
+    // Local writes are immediate, but a signed-in account can still have a server sync
+    // queued, in progress, or previously blocked by an offline connection. The refresh
+    // gesture uses this to warn before reloading the page.
+    hasUnsavedChanges() {
+      return !!get().user && (!!localStorage.getItem('gym_dirty') || !!pushTm || !!pushInFlight || pushAgain)
+    },
 
     isGuest: () => localStorage.getItem('gym_guest') === '1',
     setGuest(v) { if (v) localStorage.setItem('gym_guest', '1'); else localStorage.removeItem('gym_guest'); set({}) },
