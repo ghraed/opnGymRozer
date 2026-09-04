@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
@@ -26,9 +26,8 @@ export default function Onboarding({ close, allowSkip = true }) {
   const previous = st.onboarding || {}
   const latestWeight = st.bodyweight[st.bodyweight.length - 1]?.w || null
   const initialDays = previous.days || 3
-  // A new profile has no split override: buildOnboardingProgram can therefore keep its
-  // recommendation in sync as the answers change. Preserve a returning user's explicit
-  // choice, which remains editable on the recommendation step.
+  // New/returning users should start from the live recommendation. If a user explicitly
+  // chooses a split, that choice takes over and remains until they change it again.
   const initialProgramId = selectablePrograms().includes(previous.programId) ? previous.programId : null
   const [profile, setProfile] = useState({
     goal: previous.goal === 'gain_weight' ? 'muscle' : previous.goal || 'muscle', currentWeight: previous.currentWeight || latestWeight || null,
@@ -37,11 +36,19 @@ export default function Onboarding({ close, allowSkip = true }) {
     experience: previous.experience || 'beginner', equipment: previous.equipment || 'full_gym',
     body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
   })
+  const [hasManualSplit, setHasManualSplit] = useState(false)
   const [confirmReplace, setConfirmReplace] = useState(false)
   const plan = useMemo(() => buildOnboardingProgram(profile), [profile])
   const profileBmi = bmiFor(profile.currentWeight, profile.height, st.unit)
   const hasExistingSchedule = Object.values(st.week || {}).some(Boolean)
   const set = values => setProfile(current => ({ ...current, ...values }))
+  // Keep the recommendation authoritative until the user explicitly chooses a split.
+  useEffect(() => {
+    if (hasManualSplit) return
+    if (profile.programId !== plan.recommendedProgramId) {
+      set({ programId: plan.recommendedProgramId })
+    }
+  }, [hasManualSplit, profile.programId, plan.recommendedProgramId])
 
   const next = () => {
     if (step === 0 && !(Number(profile.currentWeight) > 0)) {
@@ -113,7 +120,10 @@ export default function Onboarding({ close, allowSkip = true }) {
           {[plan.recommendedProgramId, ...selectablePrograms().filter(programId => programId !== plan.recommendedProgramId)].map(programId => {
             const program = programById(programId)
             return <button type="button" key={programId} aria-pressed={plan.programId === programId}
-              className={`recommendation-split${plan.programId === programId ? ' on' : ''}`} onClick={() => set({ programId })}>
+              className={`recommendation-split${plan.programId === programId ? ' on' : ''}`} onClick={() => {
+                setHasManualSplit(true)
+                set({ programId })
+              }}>
               <span>{t(program.name)}</span>
               {plan.recommendedProgramId === programId && <small>{t('Recommended')}</small>}
             </button>
