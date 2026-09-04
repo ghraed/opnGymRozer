@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
@@ -27,6 +27,38 @@ const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60
 
 const clone = value => JSON.parse(JSON.stringify(value))
 const makeId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
+
+// The native select used here made a catalogue of thousands of movements hard to
+// navigate. Keep this picker local to the trainer editor: it searches the same
+// vetted exercise library clients use, plus exercises created for this client.
+function TrainerExercisePicker({ customEx = [], onPick, inputId, close }) {
+  const [query, setQuery] = useState('')
+  const [shown, setShown] = useState(30)
+  const needle = query.trim().toLowerCase()
+  const exercises = useMemo(() => [...customEx, ...EXDB]
+    .sort((a, b) => a.n.localeCompare(b.n))
+    .filter(ex => !needle || [ex.n, ex.bp, ex.tg, ex.mg, ex.eq, ...(ex.sm || [])]
+      .filter(Boolean).join(' ').toLowerCase().includes(needle)), [customEx, needle])
+
+  return <div style={{ marginTop: 10 }}>
+    <h3 style={{ marginBottom: 12 }}>Add exercise</h3>
+    <label className="small" htmlFor={inputId} style={{ display: 'block', marginBottom: 5 }}>Exercise library</label>
+    <div className="search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
+      <input id={inputId} className="input" value={query} placeholder="Search exercise, muscle, or equipment…" onChange={e => { setQuery(e.target.value); setShown(30) }} />
+    </div>
+    <div className="small muted" style={{ margin: '7px 2px' }}>{exercises.length} professional exercises available</div>
+    <div className="list" style={{ maxHeight: 310, overflowY: 'auto' }}>
+      {exercises.slice(0, shown).map(ex => <button type="button" className="item" key={ex.id} onClick={() => { onPick(ex.id); close() }} style={{ width: '100%', textAlign: 'left', background: 'none' }}>
+        <div className="thumb thumb-x"><Icon name="dumbbell" /></div>
+        <div className="grow"><div className="tt capitalize">{ex.n}</div><div className="ss capitalize">{ex.tg || ex.bp} · {ex.eq}</div></div>
+        <Icon name="plus" className="chev" />
+      </button>)}
+      {!exercises.length && <div className="empty small">No exercises match that search.</div>}
+    </div>
+    {exercises.length > shown && <Button size="sm" style={{ marginTop: 8 }} onClick={() => setShown(n => n + 30)}>Show more</Button>}
+  </div>
+}
 
 function TrainerPlanEditor({ detail, onSaved, onCancel }) {
   const [plan, setPlan] = useState(() => clone(detail.plan))
@@ -69,10 +101,12 @@ function TrainerPlanEditor({ detail, onSaved, onCancel }) {
           </div>
         </div>)}
       </div>
-      <select className="input" defaultValue="" style={{ marginTop: 8 }} onChange={e => { const id = e.target.value; if (id) updateRoutine(ri, r => { r.ex.push({ id, sets: 3, mode: 'reps', reps: 10, weight: 0 }) }); e.target.value = '' }}>
-        <option value="">+ Add exercise…</option>
-        {[...(plan.customEx || []), ...EXDB].map(ex => <option key={ex.id} value={ex.id}>{ex.n}</option>)}
-      </select>
+      <Button icon="plus" style={{ marginTop: 10 }} onClick={() => useUI.getState().openSheet(close => <TrainerExercisePicker
+        inputId={'trainer-exercise-search-' + routine.id}
+        customEx={plan.customEx || []}
+        close={close}
+        onPick={id => updateRoutine(ri, r => { r.ex.push({ id, sets: 3, mode: 'reps', reps: 10, weight: 0 }) })}
+      />)}>Add exercise</Button>
     </div>)}
     <div className="row" style={{ gap: 8, marginTop: 10 }}><Button onClick={addRoutine} icon="plus">Routine</Button><Button onClick={addCustom} icon="plus">Custom exercise</Button></div>
     <div className="row" style={{ gap: 8, marginTop: 14 }}><Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save trainer plan'}</Button><Button onClick={onCancel}>Cancel</Button></div>
