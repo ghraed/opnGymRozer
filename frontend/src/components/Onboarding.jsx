@@ -5,7 +5,7 @@ import { t } from '../lib/i18n.js'
 import { bmiFor } from '../lib/bmi.js'
 import { EXIDX } from '../lib/exercises.js'
 import { programById } from '../lib/starter.js'
-import { buildOnboardingProgram, applyOnboarding, selectablePrograms, programForDays, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
+import { buildOnboardingProgram, applyOnboarding, selectablePrograms, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
 import Icon from './Icon.jsx'
 import { Button, NumberField, Segmented, TextArea } from './ui.jsx'
 
@@ -26,7 +26,10 @@ export default function Onboarding({ close, allowSkip = true }) {
   const previous = st.onboarding || {}
   const latestWeight = st.bodyweight[st.bodyweight.length - 1]?.w || null
   const initialDays = previous.days || 3
-  const initialProgramId = selectablePrograms().includes(previous.programId) ? previous.programId : programForDays(initialDays)
+  // A new profile has no split override: buildOnboardingProgram can therefore keep its
+  // recommendation in sync as the answers change. Preserve a returning user's explicit
+  // choice, which remains editable on the recommendation step.
+  const initialProgramId = selectablePrograms().includes(previous.programId) ? previous.programId : null
   const [profile, setProfile] = useState({
     goal: previous.goal === 'gain_weight' ? 'muscle' : previous.goal || 'muscle', currentWeight: previous.currentWeight || latestWeight || null,
     height: previous.height || null,

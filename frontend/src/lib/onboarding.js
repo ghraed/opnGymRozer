@@ -250,7 +250,10 @@ export function applyOnboarding(state, profile = {}, now = Date.now()) {
   const height = Number(profile.height) > 0 ? Math.round(Number(profile.height) * 10) / 10 : null
   const targetWeight = (profile.goal === 'lose_weight' || profile.goal === 'gain_weight') && Number(profile.targetWeight) > 0
     ? Math.round(Number(profile.targetWeight) * 10) / 10 : null
-  state.onboarding = { ...profile, currentWeight, height, targetWeight, completedAt: now }
+  // Persist the resolved recommendation as the selected program. Fresh onboarding profiles
+  // intentionally omit programId until the user either accepts the recommendation or chooses
+  // another split.
+  state.onboarding = { ...profile, programId: plan.programId, currentWeight, height, targetWeight, completedAt: now }
   if (profile.body === 'male' || profile.body === 'female') state.body = profile.body
   const today = todayISO(), entry = state.bodyweight.find(item => item.d === today)
   if (entry) { entry.w = currentWeight; entry.t = now }

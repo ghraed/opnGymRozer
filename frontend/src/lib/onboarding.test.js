@@ -14,6 +14,8 @@ describe('onboarding recommendations', () => {
     for (const goal of ['muscle', 'strength', 'lose_weight', 'gain_weight', 'fitness']) {
       for (let days = 2; days <= 6; days++) {
         const plan = buildOnboardingProgram({ goal, days, equipment: 'full_gym' })
+        expect(plan.programId, `${goal}: ${days} days`).toBe(programForDays(days))
+        expect(plan.recommendedProgramId, `${goal}: ${days} days`).toBe(programForDays(days))
         expect(Object.keys(plan.week), `${goal}: ${days} days`).toHaveLength(days)
         expect(Object.values(plan.week).every(id => plan.routines.some(r => r.id === id))).toBe(true)
         plan.routines.flatMap(r => r.ex).forEach(entry => expect(EXIDX[entry.id]).toBeTruthy())
@@ -173,7 +175,7 @@ describe('onboarding recommendations', () => {
   it('records weights and profile data without touching workout history', () => {
     const state = { body: 'male', bodyweight: [], targetW: null, routines: [], week: {}, dayPlan: { '2099-01-01': 'rest' }, workouts: [{ id: 'completed' }] }
     applyOnboarding(state, { goal: 'lose_weight', currentWeight: 82.4, height: 175.5, targetWeight: 75, days: 3, body: 'female' }, 123)
-    expect(state.onboarding).toMatchObject({ completedAt: 123, currentWeight: 82.4, height: 175.5, targetWeight: 75 })
+    expect(state.onboarding).toMatchObject({ completedAt: 123, currentWeight: 82.4, height: 175.5, targetWeight: 75, programId: 'full_body' })
     expect(state.bodyweight).toEqual([{ d: todayISO(), w: 82.4, t: 123 }])
     expect(state.targetW).toBe(75)
     expect(state.body).toBe('female')

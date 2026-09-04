@@ -7,8 +7,10 @@ healthy adults. It is not a medical assessment and cannot promise a “perfect�
 
 - **Schedule:** full-body for 2–3 available days, upper/lower rotation for 4–5, and
   push/pull/legs for 6. Split and full-body routines produce similar strength and hypertrophy
-  when volume is equated, so availability and repeat exposure drive this choice. The user may
-  select any other available split; the builder then regenerates its exercises and
+  when volume is equated, so availability and repeat exposure drive this choice. During fresh
+  onboarding the recommended split is recalculated as availability changes rather than being
+  pinned to the initial three-day full-body default. The user may select any other available
+  split; the builder then regenerates its exercises and
   prescriptions for the goal instead of treating the split as the goal. When a split has more
   named sessions than the user's available days, its highest-priority movements are combined
   across the available sessions so no source routine is simply omitted. Changing a default
