@@ -56,6 +56,20 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Explicit development/demo data only. The script refuses to run unless
+  # SEED_SAMPLE_USERS=1 is supplied to the compose command.
+  seed-sample-users:
+    profiles: ["tools"]
+    build: ./api
+    command: npm run db:seed-sample-users
+    environment:
+      <<: *db-environment
+      SEED_SAMPLE_USERS: ${SEED_SAMPLE_USERS:-}
+      SEED_PASSWORD: ${SEED_PASSWORD:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   # One-time: download the exercise images + GIFs into ./media (skipped if already there).
   # ~140 MB, from github.com/hasaneyldrm/exercises-dataset (CC).
   media:
