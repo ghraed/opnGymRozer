@@ -9,7 +9,7 @@
 //     a page break — each exercise, and each routine that fits, stays in one place.
 
 import { EXIDX, isBodyweightEq } from './exercises.js'
-import { modeOf, fmtSec, isBw, isPerSide, sideReps } from './history.js'
+import { modeOf, dropCount, exLine, fmtSec, isBw, isPerSide, sideReps } from './history.js'
 import { uid, todayISO, DAYN, fmtNum, exCount } from './format.js'
 import { t } from './i18n.js'
 
@@ -44,6 +44,9 @@ function cleanEx(e) {
   if (e.inc > 0) o.inc = e.inc
   if (e.repsMin != null) o.repsMin = e.repsMin
   if (e.repsMax != null) o.repsMax = e.repsMax
+  if (mode === 'reps' && e.drops) o.drops = e.drops
+  if (mode === 'reps' && Array.isArray(e.setWeights)) o.setWeights = e.setWeights
+  if (mode === 'reps' && Array.isArray(e.dropWeights)) o.dropWeights = e.dropWeights
   if (e.sg) o.sg = e.sg
   return o
 }
@@ -152,6 +155,7 @@ const esc = str => String(str == null ? '' : str)
 function scheme(e, unit) {
   const sets = e.sets || 1
   const mode = modeOf(e)
+  if (mode === 'reps' && dropCount(e.drops)) return exLine(e, unit)
   if (mode === 'cardio') {
     const body = `${e.min || 20} min @ ${fmtNum(e.speed || 8)} km/h`
     return sets > 1 ? `${sets} × ${body}` : body

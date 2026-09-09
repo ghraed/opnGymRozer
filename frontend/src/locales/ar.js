@@ -1,5 +1,25 @@
 // Arabic UI strings. Keys are the English source strings (see lib/i18n.js).
 export default {
+  'Complete the drop rows back-to-back without rest.': 'أكمل مجموعات الدروب سيت تباعاً دون راحة.',
+  'Only these drop-set rows are used. Your regular sets return when you turn off the drop-set flag.': 'تُستخدم مجموعات الدروب سيت هذه فقط. تعود مجموعاتك الأصلية عند إلغاء تفعيل الدروب سيت.',
+  'Tap the down arrow to mark a drop set. Tap the exercise to set each weight.': 'اضغط السهم للأسفل لتحديد مجموعة تنازلية. اضغط التمرين لتحديد كل وزن.',
+  'Weight for each set': 'وزن كل مجموعة',
+  'Set {0} ({1})': 'المجموعة {0} ({1})',
+  'Drop {0} ({1})': 'التخفيف {0} ({1})',
+  'Saved weights are used next workout, including decreases. Reps are logged during the workout.': 'تُستخدم الأوزان المحفوظة في التمرين القادم، حتى عند تخفيضها. تُسجّل التكرارات أثناء التمرين.',
+  'Choose a lighter weight for each drop. Continue after the final set without rest.': 'اختر وزناً أخف لكل تخفيف. أكمل بعد المجموعة الأخيرة دون راحة.',
+  'Using your saved set weights. Weight changes are saved to this routine.': 'تُستخدم أوزان مجموعاتك المحفوظة. تُحفظ تغييرات الوزن في هذا الروتين.',
+
+  'Drop': 'تخفيف',
+  'Drop set': 'مجموعة تنازلية',
+  'Add drop': 'إضافة تخفيف',
+  '{0} drops after final set': '{0} تخفيفات بعد المجموعة الأخيرة',
+  'Continue the final set with lighter weights and no rest.': 'أكمل المجموعة الأخيرة بأوزان أخف دون راحة.',
+  'Weight drops (1–3)': 'مرات تخفيف الوزن (١–٣)',
+  'Each drop suggests 25% less weight. Adjust to your equipment and log the reps you actually perform. Set a working weight before starting.': 'يقترح كل تخفيف وزناً أقل بنسبة ٢٥٪. عدّله حسب المعدات وسجّل التكرارات الفعلية. حدّد وزن التمرين قبل البدء.',
+  'D = drop: lower the weight and continue without rest. Enter your actual reps before checking it off.': 'D = تخفيف: خفّض الوزن وأكمل دون راحة. أدخل التكرارات الفعلية قبل تحديد المجموعة كمكتملة.',
+  'Enter the reps you performed for this drop.': 'أدخل التكرارات التي نفّذتها بهذا الوزن المخفّف.',
+
   'Confirm': 'تأكيد',
   'Cancel': 'إلغاء',
   'Delete': 'حذف',

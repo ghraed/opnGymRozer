@@ -1107,3 +1107,19 @@ h4.sec{
   .exmedia img{height:380px}
   .hm-wrap{display:flex;flex-direction:column;align-items:center}
 }
+
+/* Keep the active training mode visible above exercise media, including superset cards. */
+.drop-set-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  border: 2px solid var(--acc);
+  border-radius: 12px;
+  background: var(--bg-el);
+  color: var(--label);
+}
+.drop-set-banner > :first-child { color: var(--acc); font-size: 24px; flex-shrink: 0; }
+.drop-set-banner strong { display: block; color: var(--acc); font-size: 18px; }
+.drop-set-banner strong + div { margin-top: 3px; font-size: 13px; line-height: 1.4; }

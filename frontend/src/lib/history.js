@@ -100,12 +100,13 @@ export function setLabel(id, s, cfg) {
   // rather than "0×12", which says a set was performed with no weight and means nothing.
   // A per-side set needs no mark here: the number logged is the total, the same as every
   // other set in the app.
+  const drop = s.drop ? t('Drop') + ' · ' : ''
   const reps = s.r || 0
   if (isBw({ ...c, id: c.id ?? id })) {
     const load = s.w > 0 ? `+${fmtNum(s.w)} × ` : ''
-    return `${load}${reps}` + effortTail(s)
+    return drop + `${load}${reps}` + effortTail(s)
   }
-  return `${fmtNum(s.w || 0)}×${reps}` + effortTail(s)
+  return drop + `${fmtNum(s.w || 0)}×${reps}` + effortTail(s)
 }
 // Default config for a freshly added exercise.
 export function defaultConfig(id, mode) {
@@ -122,8 +123,10 @@ export function defaultConfig(id, mode) {
 export function exLine(cfg, unit) {
   const mode = modeOf(cfg)
   const n = cfg.sets || 1
+  if (mode === 'reps' && dropCount(cfg.drops)) return t('Drop set') + ' · ' + plannedDropSets(cfg).map(s => fmtNum(s.w)).join(' / ') + ' ' + unit
   // Added weight reads as added: "+10 kg" on a dip belt, "60 kg" on a barbell.
-  const load = cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtNum(cfg.weight) + ' ' + unit : ''
+  const weights = mode === 'reps' && cfg.setWeights?.some(validWeight) ? Array.from({ length: n }, (_, i) => fmtNum(cfg.setWeights[i] ?? cfg.weight ?? 0)).join(' / ') : null
+  const load = weights != null ? ' · ' + weights + ' ' + unit : cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtNum(cfg.weight) + ' ' + unit : ''
   if (mode === 'cardio') return `${n} × ${cfg.min || 20} min @ ${fmtNum(cfg.speed || 8)} km/h`
   if (mode === 'time') return `${n} × ${fmtSec(cfg.sec || 45)}${load}`
   // This is the line with room for it, so the split is spelled out: "3 × 16 · 8/side".
@@ -176,7 +179,8 @@ export function buildSets(S, cfg) {
   const mode = modeOf(cfg)
   const sets = []
   // Last time's set at the same position, falling back to its final set when the plan grew.
-  const prevAt = i => (last ? (last.sets[i] || last.sets[last.sets.length - 1]) : null)
+  const previous = last ? last.sets.filter(s => !s.drop) : []
+  const prevAt = i => previous[i] || previous[previous.length - 1] || null
 
   if (mode === 'cardio') {
     for (let i = 0; i < n; i++) {
@@ -204,6 +208,56 @@ export function buildSets(S, cfg) {
   }
   return sets
 }
+// Each drop continues the preceding row without rest. Optional fields keep old logs valid.
+export const dropCount = value => Math.max(0, Math.min(3, Math.round(Number(value) || 0)))
+export function makeDropSet(previous) {
+  return { w: Math.floor(Math.max(0, Number(previous?.w) || 0) * 0.75 * 100) / 100, r: 0, drop: true, done: false }
+}
+// A marked exercise uses only its drop rows. Regular sets remain in the config for
+// when the flag is removed; neither their count nor their weights seeds the drop sequence.
+export function plannedDropSets(cfg) {
+  const out = []
+  for (let i = 0; i < dropCount(cfg.drops); i++) {
+    const drop = makeDropSet(out.at(-1))
+    if (validWeight(cfg.dropWeights?.[i])) drop.w = cfg.dropWeights[i]
+    out.push(drop)
+  }
+  return out
+}
+export function addPlannedDrops(sets, cfg) {
+  if (modeOf(cfg) !== 'reps') return sets
+  if (dropCount(cfg.drops)) return plannedDropSets(cfg)
+  return sets.map((s, i) => {
+    const weight = cfg.setWeights?.[i] ?? (cfg.dropWeights ? cfg.weight : undefined)
+    return validWeight(weight) ? { ...s, w: weight } : s
+  })
+}
+export const validWeight = value => typeof value === 'number' && Number.isFinite(value) && value >= 0
+// Save the edited row immediately, including lower weights and zero. Keep unrelated rows
+// automatic unless the user explicitly configured their weights.
+export function saveWorkoutWeight(S, entryIdx, setIdx, value) {
+  if (!validWeight(value)) return
+  const entry = S.active?.entries[entryIdx]
+  if (!entry?.sets[setIdx]) return
+  entry.sets[setIdx].w = value
+  if (modeOf({ ...entry.target, id: entry.id }) !== 'reps') return
+  const drop = !!entry.sets[setIdx].drop
+  const key = drop ? 'dropWeights' : 'setWeights'
+  const index = entry.sets.slice(0, setIdx).filter(s => !!s.drop === drop).length
+  entry.target ||= {}
+  entry.target[key] = [...(entry.target[key] || [])]
+  entry.target[key][index] = value
+  const routine = S.routines.find(r => r.id === S.active.routineId)
+  // Match the occurrence, since a routine can contain the same exercise twice.
+  const occurrence = S.active.entries.slice(0, entryIdx).filter(e => e.id === entry.id).length
+  const cfg = routine?.ex.filter(e => e.id === entry.id)[occurrence]
+  if (cfg) {
+    cfg[key] = [...(cfg[key] || [])]
+    cfg[key][index] = value
+  }
+}
+export const continuesDrop = (sets, i) => !!(sets[i + 1]?.drop && !sets[i + 1].done)
+
 export function workoutVolume(w) {
   let v = 0
   // No special case for unilateral work: a per-side set logs its total, so both sides are

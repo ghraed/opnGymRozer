@@ -3,7 +3,7 @@ import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf } from './lib/exercises.js'
 import { fmtDate, fmtNum, fmtVol, fmtDur, durPart, todayISO, uid, exCount, DAYN, MONTHS_LONG, ACCENTS } from './lib/format.js'
-import { lastEntryFor, bestWeightFor, buildSets, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, exLine } from './lib/history.js'
+import { lastEntryFor, bestWeightFor, buildSets, addPlannedDrops, dropCount, makeDropSet, validWeight, effectiveRoutineId, workoutVolume, setsDone, setsDoneActive, lastBW, supersetUnits, unitOf, setLabel, defaultConfig, cleanupSg, modeOf, effortOf, isBw, isPerSide, sideReps, exLine } from './lib/history.js'
 import { beep, vibrate } from './lib/sound.js'
 import { t, instrFor, getLang, INSTR_LANGS } from './lib/i18n.js'
 import { nav } from './lib/nav.js'
@@ -589,8 +589,18 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
   // Both default from the dataset and are then whatever the config says — see isBw.
   const bw = !cardio && isBw({ ...c, id: ex.id })
   const perSide = isPerSide(c)
+  const dropOnly = mode === 'reps' && dropCount(c.drops) > 0
   // Keep whatever the other mode already had (sets, weight) and fill only what is missing.
   const setMode = m => setC(x => ({ ...defaultConfig(ex.id, m), ...x, mode: m }))
+  const setBaseWeight = weight => setC(x => ({
+    ...x, weight,
+    ...(mode === 'reps' ? { setWeights: Array.from({ length: Math.max(1, Math.round(x.sets) || 1) }, () => weight) } : {})
+  }))
+  const dropWeightAt = i => {
+    let weight = 0
+    for (let j = 0; j <= i; j++) weight = validWeight(c.dropWeights?.[j]) ? c.dropWeights[j] : makeDropSet({ w: weight }).w
+    return weight
+  }
   const save = () => {
     close()
     const sets = Math.max(1, Math.round(c.sets) || (cardio ? 1 : 3))
@@ -614,6 +624,12 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       const typed = Math.max(1, Math.round(c.reps) || 10)
       const reps = perSide ? Math.ceil(typed / 2) * 2 : typed
       const out = { sets, mode: 'reps', reps, weight: Math.max(0, c.weight || 0), ...flags, ...(perSide ? { side: true } : {}), ...prog }
+      if (Array.isArray(c.setWeights)) out.setWeights = c.setWeights.slice(0, sets).map(w => validWeight(w) ? w : null)
+      if (Array.isArray(c.dropWeights)) out.dropWeights = [...c.dropWeights]
+      if (dropCount(c.drops)) {
+        out.drops = dropCount(c.drops)
+        out.dropWeights = Array.from({ length: out.drops }, (_, i) => dropWeightAt(i))
+      }
       if (policyFor({ ...c, id: ex.id }, routine, 'reps') === 'double') out.repsMin = Math.min(reps, Math.max(1, Math.round(c.repsMin) || Math.max(1, reps - 2)))
       // A ceiling below the working reps would tell you to add a set on day one.
       if (bw && !(out.weight > 0) && c.repsMax > 0) out.repsMax = Math.max(reps, Math.round(c.repsMax))
@@ -622,6 +638,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
   }
   return <>
     <h3 className="capitalize">{ex.n}</h3>
+    {dropOnly && <div className="drop-set-banner"><Icon name="arrowDown" /><div><strong>{t('Drop set')}</strong><div>{t('Complete the drop rows back-to-back without rest.')}</div></div></div>}
     <Media ex={ex} />
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '10px 0 14px' }}>
       {cardio && <span className="tag acc"><Icon name="figureRun" />{t('Cardio')}</span>}
@@ -632,7 +649,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       <Segmented className="seg-range" value={mode} onChange={setMode}
         options={[{ value: 'reps', label: t('Reps') }, { value: 'time', label: t('Time') }]} />
     </div>}
-    <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
+    {!dropOnly && <div className="row cfgrow" style={{ marginBottom: mode === 'time' ? 8 : 18 }}>
       {cardio ? <>
         <Stepper label={t('Intervals')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Minutes')} value={c.min} step={1} decimal={false} onChange={v => setC(x => ({ ...x, min: v }))} />
@@ -640,15 +657,15 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
       </> : mode === 'time' ? <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Seconds')} value={c.sec} step={5} decimal={false} onChange={v => setC(x => ({ ...x, sec: v }))} />
-        <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />
+        <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={setBaseWeight} />
       </> : <>
         <Stepper label={t('Sets')} value={c.sets} step={1} decimal={false} onChange={v => setC(x => ({ ...x, sets: v }))} />
         <Stepper label={t('Reps')} value={c.reps} step={perSide ? 2 : 1} decimal={false} onChange={v => setC(x => ({ ...x, reps: v }))} />
         {/* On bodyweight work the weight stepper is the click #32 is about, so it is not here
             until there is a belt to describe — see the added-weight row below. */}
-        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={v => setC(x => ({ ...x, weight: v }))} />}
+        {!bw && <Stepper label={t('Weight ({0})', st.unit)} value={c.weight} step={2.5} onChange={setBaseWeight} />}
       </>}
-    </div>
+    </div>}
     {mode === 'time' && !bw && <div className="small dim" style={{ marginBottom: 18 }}>
       {t('A timer runs while you hold the set. Leave the weight at 0 for bodyweight holds.')}
     </div>}
@@ -668,26 +685,48 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
     {/* A stepper is too wide to sit in a list row next to a label — it squeezes the text to
         one word per line — so added weight gets the same full-width treatment as sets and
         reps, with its explanation underneath. */}
-    {bw && <>
+    {bw && !dropOnly && <>
       <div className="row cfgrow" style={{ marginBottom: 8 }}>
         <Stepper label={t('Added ({0})', st.unit)} value={c.weight || 0} step={2.5}
-          onChange={v => setC(x => ({ ...x, weight: v }))} />
+          onChange={setBaseWeight} />
       </div>
       <div className="small dim" style={{ marginBottom: 18 }}>
         {t('For dips or pull-ups with a belt. Progression then follows the weight.')}
       </div>
     </>}
     {/* The rep ceiling only means something when there is no load to add instead. */}
-    {mode === 'reps' && bw && !(c.weight > 0) && <div className="row cfgrow" style={{ marginBottom: 18 }}>
+    {mode === 'reps' && !dropOnly && bw && !(c.weight > 0) && <div className="row cfgrow" style={{ marginBottom: 18 }}>
       <Stepper label={t('Top of the range')} value={c.repsMax || 0} step={1} decimal={false}
         onChange={v => setC(x => ({ ...x, repsMax: v }))} />
     </div>}
-    {mode === 'reps' && bw && !(c.weight > 0) && <div className="small dim" style={{ marginTop: -10, marginBottom: 18 }}>
+    {mode === 'reps' && !dropOnly && bw && !(c.weight > 0) && <div className="small dim" style={{ marginTop: -10, marginBottom: 18 }}>
       {c.repsMax > 0
         ? t('Reps climb to {0}, then a set is added and the reps start over. At {1} sets it asks you to add weight instead.', c.repsMax, MAX_BW_SETS)
         : t('Reps climb by one whenever every set was clean. Set a ceiling to add sets instead of reps forever.')}
     </div>}
-    <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} />
+    {mode === 'reps' && (dropCount(c.drops) > 0 || Array.isArray(c.setWeights)) && <>
+      {!dropOnly && <>
+      <h4 className="sec">{t('Weight for each set')}</h4>
+      <div className="small dim" style={{ marginBottom: 12 }}>{t('Saved weights are used next workout, including decreases. Reps are logged during the workout.')}</div>
+      {Array.from({ length: Math.max(1, Math.round(c.sets) || 1) }, (_, i) => <div className="row cfgrow" key={i} style={{ marginBottom: 8 }}>
+        <Stepper label={t('Set {0} ({1})', i + 1, st.unit)} value={c.setWeights?.[i] ?? c.weight ?? 0} step={2.5}
+          onChange={v => setC(x => { const weights = Array.from({ length: Math.max(1, Math.round(x.sets) || 1) }, (_, j) => x.setWeights?.[j] ?? x.weight ?? 0); weights[i] = v; return { ...x, setWeights: weights } })} />
+      </div>)}
+      </>}
+      {dropCount(c.drops) > 0 && <>
+        <h4 className="sec">{t('Drop set')}</h4>
+        <div className="row cfgrow" style={{ marginBottom: 8 }}>
+          <Stepper label={t('Weight drops (1–3)')} value={dropCount(c.drops)} step={1} decimal={false}
+            onChange={v => setC(x => ({ ...x, drops: Math.max(1, dropCount(v)) }))} />
+        </div>
+        {Array.from({ length: dropCount(c.drops) }, (_, i) => <div className="row cfgrow" key={i} style={{ marginBottom: 8 }}>
+          <Stepper label={t('Drop {0} ({1})', i + 1, st.unit)} value={dropWeightAt(i)} step={2.5}
+            onChange={v => setC(x => { const weights = Array.from({ length: dropCount(x.drops) }, (_, j) => dropWeightAt(j)); weights[i] = v; return { ...x, dropWeights: weights } })} />
+        </div>)}
+        <div className="small dim" style={{ marginBottom: 18 }}>{t('Only these drop-set rows are used. Your regular sets return when you turn off the drop-set flag.')}</div>
+      </>}
+    </>}
+    {!dropOnly && <ProgressionFields ex={ex} mode={mode} c={c} setC={setC} routine={routine} unit={st.unit} />}
     <Button variant="primary" onClick={save}>{existing ? t('Save') : t('Add to routine')}</Button>
     {ex.custom && <><div style={{ height: 8 }} /><Button icon="pencil" onClick={() => { close(); customExSheet(ex) }}>{t('Edit or delete this exercise')}</Button></>}
     {onDelete && <><div style={{ height: 8 }} /><Button variant="danger" onClick={() => { close(); onDelete() }}>{t('Remove from routine')}</Button></>}
@@ -928,7 +967,7 @@ export function beginWorkout(routineId, bw) {
   // kept on the entry purely so the workout can explain the number it chose.
   const entries = (r ? r.ex : []).map(cfg => {
     const plan = nextPrescription(st, cfg, r)
-    return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: applyPrescription(buildSets(st, cfg), plan) }
+    return { id: cfg.id, sg: cfg.sg, target: { ...cfg }, plan, sets: addPlannedDrops(applyPrescription(buildSets(st, cfg), plan), cfg) }
   })
   update(s => {
     s.active = { id: uid(), d: todayISO(), start: Date.now(), routineId, name: r ? r.name : t('Freestyle'), bw: bw || null, cur: 0, entries }
@@ -1054,7 +1093,7 @@ function doFinishWorkout() {
   w.vol = workoutVolume(w)
   update(s => {
     w.entries.forEach(e => {
-      const mx = Math.max(0, ...e.sets.filter(x => x.done).map(x => x.w || 0), e.topW || 0)
+      const mx = Math.max(0, ...e.sets.filter(x => x.done && !x.drop).map(x => x.w || 0), e.topW || 0)
       if (mx > 0) { const cur = s.exWeights[e.id]; if (!cur || mx > cur.w) s.exWeights[e.id] = { w: mx, d: w.d } }
     })
     s.workouts.push(w)

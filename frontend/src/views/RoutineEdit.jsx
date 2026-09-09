@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { exOr } from '../lib/exercises.js'
 import { uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
-import { supersetUnits, cleanupSg, exLine } from '../lib/history.js'
+import { supersetUnits, cleanupSg, exLine, modeOf, dropCount } from '../lib/history.js'
 import { Thumb } from '../components/Media.jsx'
 import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, muscleExercisesSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
@@ -31,6 +31,14 @@ export default function RoutineEdit() {
     if (cur.sg && prev.sg && cur.sg === prev.sg) delete cur.sg
     else { const gid = prev.sg || ('sg' + uid()); prev.sg = gid; cur.sg = gid }
     cleanupSg(ex)
+  })
+
+  const toggleDrop = i => edit(ex => {
+    if (dropCount(ex[i].drops)) delete ex[i].drops
+    else {
+      ex[i].drops = dropCount(ex[i].dropWeights?.length) || 1
+      ex[i].dropWeights ||= [0]
+    }
   })
 
   const units = supersetUnits(r.ex)
@@ -69,7 +77,13 @@ export default function RoutineEdit() {
           <Thumb ex={ex} />
           <div className="grow"><div className="tt capitalize">{ex.n}</div><div className="ss">{exLine(e, S.unit)}</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', alignItems: 'center' }}>
+            <div className="row" style={{ gap: 2 }}>
+            {modeOf(e) === 'reps' && <button className={'iconbtn' + (dropCount(e.drops) ? ' on-ss' : '')}
+              aria-label={t('Drop set')} aria-pressed={dropCount(e.drops) > 0} title={t('Drop set')}
+              style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }}
+              onClick={ev => { ev.stopPropagation(); toggleDrop(i) }}><Icon name="arrowDown" /></button>}
             {i > 0 && <button className={'iconbtn' + (linkedPrev ? ' on-ss' : '')} title={t('Superset with exercise above')} style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }} onClick={ev => { ev.stopPropagation(); toggleLink(i) }}><Icon name="link" /></button>}
+            </div>
             <div style={{ display: 'flex', gap: 2 }}>
               <button className="iconbtn" aria-label="Move up" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, -1) }}><Icon name="chevronUp" /></button>
               <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
@@ -96,6 +110,7 @@ export default function RoutineEdit() {
     })()}
 
     <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="link" style={{ fontSize: 13 }} />{t('Tap the link button on an exercise to superset it with the one above — you’ll do them back-to-back.')}</div>
+    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="arrowDown" />{t('Tap the down arrow to mark a drop set. Tap the exercise to set each weight.')}</div>
     {r.exerciseFilter && <div className="small dim" style={{ margin: '12px 2px 8px' }}>
       {t('Exercise suggestions are filtered for {0}. You can expand the picker to add anything else.', t(r.exerciseFilter.label))}
     </div>}
