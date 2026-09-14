@@ -1296,3 +1296,65 @@ h4.sec{
 
 .client-delete-confirm{margin-top:16px;padding-top:16px;border-top:1px solid var(--sep)}
 .client-delete-confirm h3{font-size:17px;margin-bottom:8px}
+
+/* Trainer plan editor: clear exercise cards with demonstrations and touch-sized controls. */
+.client-editor{max-width:900px}
+.trainer-plan-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:4px 0 24px}
+.trainer-plan-intro h2{font-size:22px;margin:0 0 8px;line-height:1.25}
+.trainer-plan-intro p{font-size:14px;line-height:1.5;margin:0}
+.trainer-plan-intro .tag{flex:none;margin-top:4px}
+.trainer-plan-fields{border:0;margin:0;padding:0;min-width:0}
+.trainer-routine-card{padding:0;margin-bottom:16px;overflow:hidden}
+.trainer-routine-card>summary{display:flex;align-items:center;gap:12px;padding:18px 16px;cursor:pointer;list-style:none;min-height:80px}
+.trainer-routine-card>summary::-webkit-details-marker{display:none}
+.trainer-routine-card>summary .grow{min-width:0;flex:1}
+.trainer-routine-card>summary strong{display:block;font-size:17px;font-weight:600}
+.trainer-routine-card>summary small{display:block;font-size:12px;color:var(--label-2);margin-top:5px}
+.trainer-routine-card[open]>summary{border-bottom:1px solid var(--sep)}
+.trainer-routine-card[open]>summary>.icn{transform:rotate(180deg)}
+.trainer-routine-number{display:grid;place-items:center;background:var(--acc-soft);color:var(--acc);width:40px;height:40px;border-radius:12px;font-size:14px;font-weight:650;flex:none}
+.trainer-routine-body{padding:16px}
+.trainer-routine-heading{display:flex;align-items:flex-end;gap:12px;margin-bottom:18px}
+.trainer-routine-heading label{flex:1;display:grid;gap:7px;font-size:12px;color:var(--label-2)}
+.trainer-routine-heading .input{width:100%;min-height:46px;box-sizing:border-box;background:var(--surface-2);border:1px solid var(--sep);border-radius:10px;padding:10px 12px;color:var(--label)}
+.trainer-exercise-list{display:grid;gap:16px}
+.trainer-exercise-card{border:1px solid var(--sep);border-radius:16px;background:var(--surface);overflow:hidden;min-width:0}
+.trainer-exercise-heading{display:flex;align-items:center;gap:10px;padding:14px 12px;border-bottom:1px solid var(--sep)}
+.trainer-exercise-heading>.grow{min-width:0;flex:1}
+.trainer-exercise-heading h3{font-size:15px;font-weight:600;line-height:1.4;margin:0}
+.trainer-exercise-heading p{font-size:12px;line-height:1.4;color:var(--label-2);margin:5px 0 0}
+.trainer-exercise-order{color:var(--label-3);font-size:12px;font-variant-numeric:tabular-nums;flex:none}
+.trainer-remove{flex:none;color:var(--label-2)}
+.trainer-remove:hover{color:var(--red);background:color-mix(in srgb,var(--red) 8%,transparent)}
+.trainer-exercise-content{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding:14px}
+.trainer-exercise-preview{position:relative;margin:0;border-radius:12px;overflow:hidden;background:#fff;min-width:0;height:190px;border:1px solid var(--sep)}
+.trainer-exercise-preview img{display:block;width:100%;height:100%;object-fit:contain}
+.trainer-preview-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--surface-2);color:var(--label-2);font-size:12px}
+.trainer-preview-empty .icn{width:32px;height:32px}
+.trainer-preview-toggle{position:absolute;bottom:8px;right:8px;display:flex;gap:6px;align-items:center;justify-content:center;min-height:44px;padding:8px 12px;border:0;border-radius:10px;background:#192126e8;color:#fff;font-size:12px;font-weight:500;cursor:pointer}
+.trainer-preview-toggle .icn{width:15px;height:15px}
+.trainer-exercise-settings{min-width:0}
+.trainer-exercise-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.trainer-exercise-fields label{display:grid;gap:7px;font-size:12px;color:var(--label-2);min-width:0}
+.trainer-exercise-fields .num{width:100%;min-width:0;min-height:48px;border:1px solid var(--sep);border-radius:10px;box-sizing:border-box;background:var(--surface-2);color:var(--label);font-size:17px;padding:10px;text-align:start}
+.trainer-exercise-fields .num::placeholder{font-size:12px}
+.trainer-replace{margin-top:14px;min-height:44px;width:100%}
+.trainer-exercise-instructions{font-size:13px;color:var(--label-2);line-height:1.6;margin-top:6px}
+.trainer-exercise-instructions summary{padding:12px 0;min-height:44px;cursor:pointer;color:var(--label)}
+.trainer-exercise-instructions ol{padding-inline-start:20px;margin:0 0 8px}
+.trainer-exercise-instructions li{margin-bottom:8px}
+.trainer-add-exercise{width:100%;min-height:48px;margin-top:16px;background:var(--acc-soft);color:var(--acc)}
+.trainer-routine-empty{text-align:center;padding:24px 12px;font-size:14px;color:var(--label-2)}
+.trainer-routine-empty p{margin-top:10px}
+.trainer-plan-tools{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}
+.trainer-plan-tools>.btn{flex:1;min-height:48px}
+.trainer-plan-actions{position:sticky;bottom:calc(72px + env(safe-area-inset-bottom));z-index:5;padding:14px;border:1px solid var(--sep);border-radius:16px;background:var(--surface);box-shadow:0 6px 24px #00000012;margin:20px 0}
+.trainer-plan-actions>span{display:block;text-align:center;margin-bottom:10px;font-size:12px}
+.trainer-plan-actions>div{display:flex;gap:10px}
+.trainer-plan-actions .btn{flex:1;min-height:48px;white-space:nowrap}
+@media(min-width:560px){.trainer-exercise-content{grid-template-columns:190px minmax(0,1fr);padding:18px;gap:20px}.trainer-exercise-preview{height:210px}.trainer-plan-actions{display:flex;align-items:center;justify-content:space-between;gap:16px}.trainer-plan-actions>span{margin:0;text-align:start}.trainer-plan-actions>div{min-width:280px}.trainer-routine-body{padding:20px}}
+@media(max-width:360px){.trainer-plan-intro{flex-direction:column}.trainer-routine-body{padding:10px}.trainer-exercise-content{padding:10px}.trainer-exercise-heading{gap:7px;padding:10px}}
+.trainer-custom-form h3{margin-bottom:8px}
+.trainer-custom-form label{display:grid;gap:8px;margin-top:14px;font-size:13px;color:var(--label-2)}
+.trainer-custom-form .input{width:100%;min-height:48px;padding:12px;border:1px solid var(--sep);border-radius:10px;box-sizing:border-box;background:var(--surface-2);color:var(--label)}
+.trainer-custom-form .trainer-plan-tools{margin-bottom:0}

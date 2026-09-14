@@ -9,7 +9,9 @@ import { workoutVolume, setsDone } from '../lib/history.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import { ProfileAvatar } from '../components/ProfilePhoto.jsx'
-import { Button } from '../components/ui.jsx'
+import { Button, NumberField } from '../components/ui.jsx'
+import ExercisePreview from '../components/ExercisePreview.jsx'
+import { Thumb } from '../components/Media.jsx'
 import LineChart from '../components/LineChart.jsx'
 import { EXDB, EXIDX } from '../lib/exercises.js'
 import { estimate1RM } from '../lib/onerm.js'
@@ -45,10 +47,10 @@ function TrainerExercisePicker({ customEx = [], onPick, inputId, close }) {
       <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input id={inputId} className="input" value={query} placeholder="Search exercise, muscle, or equipment…" onChange={e => { setQuery(e.target.value); setShown(30) }} />
     </div>
-    <div className="small muted" style={{ margin: '7px 2px' }}>{exercises.length} professional exercises available</div>
+    <div className="small muted" style={{ margin: '7px 2px' }}>{exercises.length} exercises available</div>
     <div className="list" style={{ maxHeight: 310, overflowY: 'auto' }}>
       {exercises.slice(0, shown).map(ex => <button type="button" className="item" key={ex.id} onClick={() => { onPick(ex.id); close() }} style={{ width: '100%', textAlign: 'left', background: 'none' }}>
-        <div className="thumb thumb-x"><Icon name="dumbbell" /></div>
+        <Thumb ex={ex} />
         <div className="grow"><div className="tt capitalize">{ex.n}</div><div className="ss capitalize">{ex.tg || ex.bp} · {ex.eq}</div></div>
         <Icon name="plus" className="chev" />
       </button>)}
@@ -58,17 +60,20 @@ function TrainerExercisePicker({ customEx = [], onPick, inputId, close }) {
   </div>
 }
 
-function TrainerPlanEditor({ detail, onSaved, onCancel }) {
+export function TrainerPlanEditor({ detail, onSaved, onCancel }) {
   const [plan, setPlan] = useState(() => clone(detail.plan))
   const [saving, setSaving] = useState(false)
+  const [customDraft, setCustomDraft] = useState(null)
   const toast = useUI(s => s.toast)
   const updateRoutine = (index, fn) => setPlan(p => { const n = clone(p); fn(n.routines[index]); return n })
   const addRoutine = () => setPlan(p => ({ ...p, routines: [...p.routines, { id: makeId(), name: 'New routine', emoji: 'dumbbell', ex: [] }] }))
   const addCustom = () => {
-    const name = window.prompt('Custom exercise name')?.trim()
+    const name = customDraft?.name.trim()
     if (!name) return
-    const bodyPart = window.prompt('Body part', 'other')?.trim() || 'other'
+    const bodyPart = customDraft.bodyPart.trim() || 'other'
     setPlan(p => ({ ...p, customEx: [...(p.customEx || []), { id: 'custom-' + makeId(), n: name, bp: bodyPart, tg: bodyPart, eq: 'custom', custom: true }] }))
+    setCustomDraft(null)
+    toast('Custom exercise added to the library')
   }
   const save = () => confirmSheet({
     title: 'Replace client plan?',
@@ -82,32 +87,74 @@ function TrainerPlanEditor({ detail, onSaved, onCancel }) {
       } catch (e) { toast(e.message) } finally { setSaving(false) }
     }
   })
-  return <div>
-    <div className="row between"><h3 style={{ margin: 0 }}>Editing {detail.user.name}'s plan</h3><span className="tag acc">isolated editor</span></div>
-    <div className="small muted" style={{ margin: '7px 0 14px' }}>Changes affect this client only. Workout history and weigh-ins are read-only.</div>
-    {(plan.routines || []).map((routine, ri) => <div className="card" key={routine.id} style={{ marginBottom: 10 }}>
-      <div className="row" style={{ gap: 8 }}>
-        <input className="input" value={routine.name} aria-label="Routine name" onChange={e => updateRoutine(ri, r => { r.name = e.target.value })} />
-        <button className="iconbtn" aria-label="Delete routine" onClick={() => setPlan(p => ({ ...p, routines: p.routines.filter((_, i) => i !== ri) }))}><Icon name="trash" /></button>
+  const exerciseFor = id => (plan.customEx || []).find(ex => ex.id === id) || EXIDX[id] || { id, n: 'Unknown exercise', eq: '', tg: '' }
+  const changeField = (ri, ei, field, value) => updateRoutine(ri, routine => {
+    const entry = routine.ex[ei]
+    entry[field] = value
+    if (field === 'reps' && entry.repsMin > value) entry.repsMin = value
+    if (field === 'repsMin' && value > entry.reps) entry.reps = value
+  })
+  const picker = (ri, replaceIndex = null) => useUI.getState().openSheet(close => <TrainerExercisePicker
+    inputId={'trainer-exercise-search-' + plan.routines[ri].id}
+    customEx={plan.customEx || []} close={close}
+    onPick={id => updateRoutine(ri, routine => {
+      const exercise = exerciseFor(id)
+      const entry = exercise.bp === 'cardio' ? { id, sets: 1, mode: 'cardio', min: 20, speed: 0 }
+        : { id, sets: 3, mode: 'reps', reps: 10, weight: 0 }
+      if (replaceIndex === null) routine.ex.push(entry)
+      else routine.ex[replaceIndex] = entry
+    })}
+  />)
+  const removeRoutine = ri => setPlan(current => {
+    const id = current.routines[ri].id
+    return { ...current, routines: current.routines.filter((_, i) => i !== ri),
+      week: Object.fromEntries(Object.entries(current.week || {}).filter(([, routineId]) => routineId !== id)),
+      dayPlan: Object.fromEntries(Object.entries(current.dayPlan || {}).filter(([, routineId]) => routineId !== id)) }
+  })
+  return <div className="trainer-plan-editor">
+    <div className="trainer-plan-intro"><div><h2>{detail.user.name}'s training plan</h2><p className="muted">Review the demonstrations and adjust each exercise before saving.</p></div>
+      <span className="tag acc">{plan.routines.length} routines</span></div>
+    <fieldset className="trainer-plan-fields" disabled={saving}>
+    {(plan.routines || []).map((routine, ri) => <details className="card trainer-routine-card" key={routine.id} open={ri === 0}>
+      <summary><span className="trainer-routine-number">{String(ri + 1).padStart(2, '0')}</span><span className="grow"><strong>{routine.name || 'Untitled routine'}</strong><small>{routine.ex.length} exercises · {routine.ex.filter(e => e.mode !== 'cardio').reduce((total, e) => total + (e.sets || 0), 0)} working sets</small></span><Icon name="chevronDown" /></summary>
+      <div className="trainer-routine-body">
+        <div className="trainer-routine-heading"><label>Routine name<input className="input" value={routine.name} onChange={e => updateRoutine(ri, r => { r.name = e.target.value })} /></label>
+          <button type="button" className="iconbtn trainer-remove" aria-label={`Delete ${routine.name} routine`} onClick={() => removeRoutine(ri)}><Icon name="trash" /></button></div>
+        <div className="trainer-exercise-list">
+        {(routine.ex || []).map((entry, ei) => {
+          const exercise = exerciseFor(entry.id)
+          const mode = entry.mode || (exercise.bp === 'cardio' ? 'cardio' : 'reps')
+          const fields = mode === 'cardio' ? [['min', 'Duration (min)', 20, true], ['speed', 'Speed (km/h)', 0, true]]
+            : [['sets', 'Sets', 3, false], ...(mode === 'time' ? [['sec', 'Hold (sec)', 45, false]]
+              : [...(entry.repsMin ? [['repsMin', 'Min reps', entry.repsMin, false]] : []), ['reps', entry.repsMin ? 'Max reps' : 'Reps', 10, false]]), ['weight', `Weight (${detail.unit || 'kg'})`, 0, true]]
+          return <article className="trainer-exercise-card" key={entry.id + '-' + ei}>
+            <div className="trainer-exercise-heading"><span className="trainer-exercise-order">{ei + 1}</span><div className="grow"><h3 className="capitalize">{exercise.n}</h3><p className="capitalize">{[exercise.tg || exercise.bp, exercise.eq].filter(Boolean).join(' · ')}</p></div>
+              <button type="button" className="iconbtn trainer-remove" aria-label={`Remove ${exercise.n}`} onClick={() => updateRoutine(ri, r => { r.ex.splice(ei, 1) })}><Icon name="trash" /></button></div>
+            <div className="trainer-exercise-content"><ExercisePreview exercise={exercise} />
+              <div className="trainer-exercise-settings"><div className="trainer-exercise-fields">
+                {fields.map(([field, label, fallback, decimal]) => <label key={field}>{label}<NumberField aria-label={`${exercise.n}: ${label}`} value={entry[field] ?? fallback} decimal={decimal}
+                  onChange={value => changeField(ri, ei, field, ['weight', 'speed'].includes(field) ? value : Math.max(1, value))} /></label>)}
+                {mode !== 'cardio' && <label>Rest (sec)<NumberField aria-label={`${exercise.n}: Rest (sec)`} value={entry.rest ?? null} placeholder="Client default" nullable decimal={false} onChange={value => changeField(ri, ei, 'rest', value == null ? null : Math.max(1, value))} /></label>}
+              </div>
+              <Button type="button" size="sm" className="trainer-replace" onClick={() => picker(ri, ei)}>Replace exercise</Button>
+              {!!exercise.st?.length && <details className="trainer-exercise-instructions"><summary>Technique notes</summary><ol>{exercise.st.map((step, i) => <li key={i}>{step}</li>)}</ol></details>}
+              </div>
+            </div>
+          </article>
+        })}
+        {!routine.ex.length && <div className="trainer-routine-empty"><Icon name="dumbbell" /><p>Add your first exercise to build this routine.</p></div>}
+        </div>
+        <Button type="button" icon="plus" className="trainer-add-exercise" onClick={() => picker(ri)}>Add exercise</Button>
       </div>
-      <div className="list" style={{ marginTop: 8 }}>
-        {(routine.ex || []).map((entry, ei) => <div key={entry.id + '-' + ei} style={{ padding: '8px 0', borderBottom: '1px solid var(--sep)' }}>
-          <div className="row between"><span className="small capitalize" style={{ fontWeight: 600 }}>{EXIDX[entry.id]?.n || (plan.customEx || []).find(e => e.id === entry.id)?.n || entry.id}</span>
-            <button className="iconbtn" aria-label="Remove exercise" onClick={() => updateRoutine(ri, r => { r.ex.splice(ei, 1) })}><Icon name="trash" /></button></div>
-          <div className="row" style={{ gap: 6, marginTop: 6 }}>
-            {['sets', 'reps', 'weight'].map(field => <label className="small" style={{ flex: 1 }} key={field}>{field}<input className="input" type="number" min="0" step={field === 'weight' ? '.5' : '1'} value={entry[field] ?? (field === 'weight' ? 0 : field === 'sets' ? 3 : 10)} onChange={e => updateRoutine(ri, r => { r.ex[ei][field] = +e.target.value })} /></label>)}
-          </div>
-        </div>)}
-      </div>
-      <Button icon="plus" style={{ marginTop: 10 }} onClick={() => useUI.getState().openSheet(close => <TrainerExercisePicker
-        inputId={'trainer-exercise-search-' + routine.id}
-        customEx={plan.customEx || []}
-        close={close}
-        onPick={id => updateRoutine(ri, r => { r.ex.push({ id, sets: 3, mode: 'reps', reps: 10, weight: 0 }) })}
-      />)}>Add exercise</Button>
-    </div>)}
-    <div className="row" style={{ gap: 8, marginTop: 10 }}><Button onClick={addRoutine} icon="plus">Routine</Button><Button onClick={addCustom} icon="plus">Custom exercise</Button></div>
-    <div className="row" style={{ gap: 8, marginTop: 14 }}><Button variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save trainer plan'}</Button><Button onClick={onCancel}>Cancel</Button></div>
+    </details>)}
+    <div className="trainer-plan-tools"><Button type="button" onClick={addRoutine} icon="plus">Add routine</Button><Button type="button" onClick={() => setCustomDraft({ name: '', bodyPart: '' })} icon="plus">Custom exercise</Button></div>
+    {customDraft && <section className="trainer-custom-form card"><h3>Create a custom exercise</h3><p className="small muted">Add it to this client's library, then choose it with Add exercise.</p>
+      <label>Exercise name<input className="input" value={customDraft.name} onChange={event => setCustomDraft({ ...customDraft, name: event.target.value })} /></label>
+      <label>Body part (optional)<input className="input" value={customDraft.bodyPart} onChange={event => setCustomDraft({ ...customDraft, bodyPart: event.target.value })} /></label>
+      <div className="trainer-plan-tools"><Button type="button" onClick={() => setCustomDraft(null)}>Cancel</Button><Button type="button" variant="primary" onClick={addCustom} disabled={!customDraft.name.trim()}>Add to library</Button></div>
+    </section>}
+    </fieldset>
+    <div className="trainer-plan-actions"><span className="small muted">Changes apply when you save.</span><div><Button type="button" onClick={onCancel} disabled={saving}>Cancel</Button><Button type="button" variant="primary" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save plan'}</Button></div></div>
   </div>
 }
 
