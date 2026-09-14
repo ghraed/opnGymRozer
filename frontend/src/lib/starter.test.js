@@ -13,7 +13,10 @@ describe('workout program templates', () => {
       expect(Object.values(week).every(id => routineIds.has(id))).toBe(true)
       routines.forEach(routine => {
         expect(routine.ex.length).toBeGreaterThan(0)
-        routine.ex.forEach(item => expect(EXIDX[item.id], `${program.id}: ${item.id}`).toBeTruthy())
+        routine.ex.forEach(item => {
+          expect(EXIDX[item.id], `${program.id}: ${item.id}`).toBeTruthy()
+          expect(item.sets, `${program.id}: ${item.id}`).toBe(3)
+        })
       })
     })
   })

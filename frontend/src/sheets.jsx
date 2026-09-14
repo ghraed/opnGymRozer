@@ -56,7 +56,7 @@ function ProgramBuilder({ close }) {
   const install = empty => {
     const personalized = !empty && st.onboarding?.completedAt
     const built = personalized
-      ? buildOnboardingProgram({ ...st.onboarding, programId: selected.id })
+      ? buildOnboardingProgram({ ...st.onboarding, unit: st.unit, programId: selected.id })
       : buildProgram(selected.id, { empty })
     update(s => {
       s.routines.push(...built.routines)
@@ -64,7 +64,15 @@ function ProgramBuilder({ close }) {
       // available, but stale day assignments cannot accidentally mix two programs.
       s.week = built.week
       s.dayPlan = {}
-      if (personalized) s.onboarding.programId = selected.id
+      if (personalized) {
+        s.customEx ||= []
+        for (const exercise of built.customEx) {
+          if (!s.customEx.some(existing => existing.id === exercise.id)) s.customEx.push({ ...exercise })
+        }
+        s.onboarding.programId = selected.id
+        s.onboarding.trainingPolicyVersion = built.evidence.policyVersion
+        s.onboarding.trainingAssessment = built.evidence
+      }
     })
     close()
     toast(t(empty ? 'Custom {0} schedule created' : '{0} program loaded', selected.name))
@@ -616,7 +624,7 @@ function ExConfig({ ex, existing, onSave, onDelete, close, routine }) {
     // rather than carrying a flag nothing downstream can read.
     const flags = {}
     if (bw !== isBodyweightEq(ex.id)) flags.bodyweight = bw
-    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed || 8) })
+    if (cardio) onSave({ sets, min: Math.max(1, Math.round(c.min) || 20), speed: Math.max(0, c.speed ?? 8) })
     else if (mode === 'time') onSave({ sets, mode: 'time', sec: Math.max(1, Math.round(c.sec) || 45), weight: Math.max(0, c.weight || 0), ...flags, ...prog })
     else {
       // A unilateral target is stored even: the split has to divide, and a typed 15 would

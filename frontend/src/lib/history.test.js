@@ -64,7 +64,7 @@ describe('setLabel', () => {
 
   it('reads a legacy set with no config exactly as before', () => {
     expect(setLabel(LIFT, { w: 0, r: 0 })).toBe('0×0')
-    expect(setLabel(CARDIO, {})).toBe('0 min @ 0 km/h')
+    expect(setLabel(CARDIO, {})).toBe('0 min')
   })
 
   it('appends RIR when present, including a valid 0', () => {

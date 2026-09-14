@@ -8,6 +8,9 @@ import { applyOnboarding, buildOnboardingProgram, GOALS, EXPERIENCES, EQUIPMENT 
 import { Button, NumberField, Segmented, TextArea } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
 import ProfilePhoto from '../components/ProfilePhoto.jsx'
+import ProgramRecommendation from '../components/ProgramRecommendation.jsx'
+import TrainingConstraints from '../components/TrainingConstraints.jsx'
+import { SEX_OPTIONS } from '../lib/training-evidence.js'
 
 const titles = ['Your body and goals', 'Your training preferences', 'Review your profile']
 function Choices({ options, value, onChange }) {
@@ -32,14 +35,19 @@ export default function ProfileSetup() {
       currentWeight: previous.currentWeight || st.bodyweight.at(-1)?.w || null,
       height: previous.height || null, targetWeight: previous.targetWeight || st.targetW || null,
       days: previous.days || null, experience: previous.experience || '', equipment: previous.equipment || '',
-      profileImage: st.profileImage || null, body: previous.body || '', injuryNote: previous.injuryNote || '', ...draft,
+      sex: previous.sex || null, programId: null,
+      sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
+      hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
+      profileImage: st.profileImage || null, body: previous.body || 'none', injuryNote: previous.injuryNote || '', ...draft,
     }
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [photoBusy, setPhotoBusy] = useState(false)
-  const preservePlan = st.routines.length > 0
-  const recommendation = useMemo(() => buildOnboardingProgram(profile), [profile])
+  const hasExistingPlan = st.routines.length > 0
+  const [replacePlan, setReplacePlan] = useState(false)
+  const preservePlan = hasExistingPlan && !replacePlan
+  const recommendation = useMemo(() => buildOnboardingProgram({ ...profile, unit: st.unit }), [profile, st.unit])
   const set = values => {
     setError('')
     setProfile(current => {
@@ -60,14 +68,14 @@ export default function ProfileSetup() {
     navigate('/setup/' + (step + 2))
   }
   const save = async () => {
-    const message = profileStepError(profile, 0) || profileStepError(profile, 1)
+    const message = profileStepError(profile, 0) || profileStepError(profile, 1) || profileStepError(profile, 2)
     if (message) { setError(t(message)); return }
     setSaving(true)
     setError('')
     try {
       const state = JSON.parse(JSON.stringify(useStore.getState().S))
       const { profileImage, ...fitnessProfile } = profile
-      applyOnboarding(state, fitnessProfile, Date.now(), { preservePlan })
+      applyOnboarding(state, { ...fitnessProfile, unit: st.unit }, Date.now(), { preservePlan })
       state.profileImage = profileImage || null
       state._ts = Date.now()
       const result = await api('/api/data', { method: 'PUT', body: JSON.stringify({ state, revisions: useStore.getState().revisions }) })
@@ -109,15 +117,23 @@ export default function ProfileSetup() {
           <Choices options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
           <h2 className="setup-section-title">{t('Available equipment')}</h2>
           <Choices options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
-          <h2 className="setup-section-title">{t('Body diagram')}</h2>
-          <Choices options={[{value:'male',label:'Male'},{value:'female',label:'Female'},{value:'none',label:'No preference'}]} value={profile.body} onChange={body => set({ body })} />
+          <TrainingConstraints profile={profile} onChange={set} />
+          <h2 className="setup-section-title">{t('Sex (optional)')}</h2>
+          <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
         </section>}
         {step === 2 && <>
           <section className="card"><h2>{t('Your profile')}</h2><dl className="setup-summary">
-            {[[t('Goal'),labelFor(GOALS,profile.goal)],[t('Current weight ({0})',st.unit),profile.currentWeight],[t('Height (cm)'),profile.height],...(profile.goal === 'lose_weight' ? [[t('Target weight ({0})',st.unit),profile.targetWeight]] : []),[t('Days per week'),profile.days],[t('Training experience'),labelFor(EXPERIENCES,profile.experience)],[t('Available equipment'),labelFor(EQUIPMENT,profile.equipment)],[t('Body diagram'),t(profile.body === 'none' ? 'No preference' : profile.body === 'female' ? 'Female' : 'Male')]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-          </dl></section>
+            {[[t('Goal'),labelFor(GOALS,profile.goal)],[t('Current weight ({0})',st.unit),profile.currentWeight],[t('Height (cm)'),profile.height],...(profile.goal === 'lose_weight' ? [[t('Target weight ({0})',st.unit),profile.targetWeight]] : []),[t('Days per week'),profile.days],[t('Time per session'),t('{0} minutes',profile.sessionMinutes)],[t('Current recovery'),t(profile.recovery === 'limited' ? 'Limited / returning' : 'Recovering well')],[t('Training experience'),labelFor(EXPERIENCES,profile.experience)],[t('Available equipment'),labelFor(EQUIPMENT,profile.equipment)],[t('Sex'),profile.sex ? labelFor(SEX_OPTIONS,profile.sex) : t('Not provided')]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+          </dl>
+            <h3 className="setup-section-title">{t('Sex (optional)')}</h3>
+            <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
+          </section>
           <section className="card"><label className="setup-note">{t('Anything we should know?')}<span className="small muted">{t('Optional injury or limitation')}</span><TextArea rows="3" maxLength="300" value={profile.injuryNote} onChange={event => set({ injuryNote:event.target.value })} /></label></section>
-          <section className="card"><h2>{t(preservePlan ? 'Your current plan' : 'Your starting plan')}</h2><p className="muted">{preservePlan ? t('Your existing routines and training schedule will stay in place.') : t('{0} · {1} days per week',t(recommendation.name),recommendation.days)}</p></section>
+          {hasExistingPlan && <section className="card"><h2>{t('Your current plan')}</h2><p className="small muted">{t('You already have a plan. Keep its schedule, or use the program selected below. Previous routines and workout history stay saved.')}</p>
+            <Choices options={[{value:'keep',label:'Keep my current schedule'},{value:'replace',label:'Use the selected program below'}]} value={replacePlan ? 'replace' : 'keep'} onChange={choice => setReplacePlan(choice === 'replace')} />
+            {preservePlan && <p className="small muted">{t('The program below is a preview. Your current schedule will be kept when you save.')}</p>}
+          </section>}
+          <ProgramRecommendation profile={profile} plan={recommendation} unit={st.unit} onChoose={programId => set({ programId })} />
         </>}
       </fieldset>
       {error && <p className="setup-error" role="alert">{error}</p>}

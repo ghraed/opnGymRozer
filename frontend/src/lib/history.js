@@ -94,7 +94,7 @@ const effortTail = s => {
 export function setLabel(id, s, cfg) {
   const c = cfg || { id }
   const mode = modeOf(c)
-  if (mode === 'cardio') return `${s.min || 0} min @ ${fmtNum(s.speed || 0)} km/h`
+  if (mode === 'cardio') return `${s.min || 0} min` + (s.speed > 0 ? ` @ ${fmtNum(s.speed)} km/h` : '')
   if (mode === 'time') return fmtSec(s.sec) + (s.w > 0 ? ` · ${fmtNum(s.w)}` : '')
   // Bodyweight reads as what you did — "12", or "+10 × 12" once there is a belt involved —
   // rather than "0×12", which says a set was performed with no weight and means nothing.
@@ -127,7 +127,7 @@ export function exLine(cfg, unit) {
   // Added weight reads as added: "+10 kg" on a dip belt, "60 kg" on a barbell.
   const weights = mode === 'reps' && cfg.setWeights?.some(validWeight) ? Array.from({ length: n }, (_, i) => fmtNum(cfg.setWeights[i] ?? cfg.weight ?? 0)).join(' / ') : null
   const load = weights != null ? ' · ' + weights + ' ' + unit : cfg.weight ? ' · ' + (isBw(cfg) ? '+' : '') + fmtNum(cfg.weight) + ' ' + unit : ''
-  if (mode === 'cardio') return `${n} × ${cfg.min || 20} min @ ${fmtNum(cfg.speed || 8)} km/h`
+  if (mode === 'cardio') return `${n} × ${cfg.min || 20} min` + ((cfg.speed ?? 8) > 0 ? ` @ ${fmtNum(cfg.speed ?? 8)} km/h` : '')
   if (mode === 'time') return `${n} × ${fmtSec(cfg.sec || 45)}${load}`
   // This is the line with room for it, so the split is spelled out: "3 × 16 · 8/side".
   const split = isPerSide(cfg) ? ' · ' + t('{0}/side', fmtNum(sideReps(cfg.reps))) : ''
@@ -173,6 +173,8 @@ export function effectiveRoutine(S, iso) {
   const id = effectiveRoutineId(S, iso)
   return id ? S.routines.find(r => r.id === id) || null : null
 }
+export const restSecondsFor = (cfg, fallback) => Number.isFinite(cfg?.rest) && cfg.rest > 0 ? cfg.rest : fallback
+
 export function buildSets(S, cfg) {
   const last = lastEntryFor(S, cfg.id)
   const n = Math.max(1, cfg.sets || 1)
@@ -185,7 +187,7 @@ export function buildSets(S, cfg) {
   if (mode === 'cardio') {
     for (let i = 0; i < n; i++) {
       const prev = prevAt(i)
-      sets.push({ min: prev ? prev.min : (cfg.min || 20), speed: prev ? prev.speed : (cfg.speed || 8), done: false })
+      sets.push({ min: prev ? prev.min : (cfg.min || 20), speed: prev ? prev.speed : (cfg.speed ?? 8), done: false })
     }
     return sets
   }

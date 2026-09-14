@@ -1236,6 +1236,46 @@ h4.sec{
 .setup-actions .btn.primary{flex:1 1 160px}
 .setup-actions .btn:not(.primary){flex:0 0 auto;min-width:96px;white-space:nowrap;background:var(--surface-3);color:var(--label);font-weight:500}
 .setup-error{color:var(--red);font-size:14px;margin:14px 0;line-height:1.5}
+.setup-program>p{margin:10px 0;line-height:1.5}
+.setup-program h3{font-size:17px;margin-top:20px}
+.setup-program .recommendation-split{min-height:110px;padding:12px;gap:6px}
+.setup-program .setup-split-description{font-size:12px;font-weight:400;color:var(--label-2);line-height:1.4}
+.setup-program .setup-auto-program{margin-top:12px;background:var(--surface-3);color:var(--label)}
+.setup-plan-overview{margin:16px 0;padding:14px;border-radius:12px;background:var(--acc-soft)}
+.setup-plan-overview h3{margin:0 0 6px}
+.setup-plan-overview p{font-size:14px;line-height:1.5}
+.setup-evidence{margin-top:16px;font-size:14px;line-height:1.5}
+.setup-evidence summary{cursor:pointer;min-height:48px;padding:12px 0;color:var(--label);font-weight:500}
+.setup-evidence p{margin:8px 0;color:var(--label-2)}
+.setup-evidence ul{padding-inline-start:20px}
+.setup-evidence li{margin:12px 0}
+.setup-program a{color:var(--acc);text-decoration:underline;text-underline-offset:3px}
+.setup-workouts{display:grid;gap:10px;margin-top:12px}
+.setup-workout{border-radius:12px;background:var(--surface-2);padding:0 12px}
+.setup-workout summary{cursor:pointer;min-height:60px;padding:12px 0;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:15px}
+.setup-workout summary small{display:block;margin-top:4px;font-size:12px;color:var(--label-2)}
+.setup-workout summary>span:last-child{flex:none}
+.setup-workout ol{list-style:none;margin:0;padding:0}
+.setup-workout li{padding:12px 0;border-top:1px solid var(--sep)}
+.setup-exercise-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;font-size:14px;line-height:1.5}
+.setup-exercise-title strong{flex:none;white-space:nowrap}
+.setup-workout li p{margin-top:5px;line-height:1.5}
+.training-constraints{display:grid;gap:14px;margin-top:24px}
+.training-constraints label{display:grid;gap:8px;font-size:14px}
+.training-constraints select{width:100%;min-width:0;min-height:48px;padding:10px;border:1px solid var(--sep);border-radius:10px;background:var(--surface-2);color:var(--label);font:inherit}
+.training-constraints .training-equipment-check{display:flex;align-items:center;gap:12px;min-height:48px;line-height:1.4}
+.training-equipment-check input{flex:none;width:22px;height:22px;accent-color:var(--acc)}
+.setup-volume-grid{display:grid;gap:10px;margin:12px 0}
+.setup-volume-item{padding:12px;background:var(--surface-2);border-radius:10px;min-width:0}
+.setup-volume-item>div{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13px}
+.setup-volume-item>div span{white-space:nowrap}
+.setup-volume-item meter{display:block;width:100%;height:16px;accent-color:var(--acc)}
+.setup-volume-item p,.setup-volume-item small{font-size:12px;margin:4px 0 0;line-height:1.4}
+.setup-volume-item small{display:block;color:var(--label-2)}
+.setup-workout .setup-exercise-reason{margin-top:6px;font-size:13px;color:var(--label-2)}
+.setup-workout .setup-exercise-reason summary{display:block;min-height:44px;padding:12px 0;font-size:13px;color:var(--acc)}
+@media(min-width:600px){.setup-volume-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(min-width:600px){.setup-program .recommendation-split{min-height:100px}}
 @media(max-width:360px){.setup-measurements{grid-template-columns:minmax(0,1fr)}}
 
 .profile-avatar{width:72px;height:72px;flex:none;display:grid;place-items:center;overflow:hidden;border-radius:50%;background:var(--acc-soft);color:var(--acc);font-size:28px;font-weight:600}

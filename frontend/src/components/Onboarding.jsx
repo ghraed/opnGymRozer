@@ -2,11 +2,11 @@ import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { t } from '../lib/i18n.js'
-import { bmiFor } from '../lib/bmi.js'
-import { EXIDX } from '../lib/exercises.js'
-import { programById } from '../lib/starter.js'
-import { buildOnboardingProgram, applyOnboarding, selectablePrograms, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
+import { buildOnboardingProgram, applyOnboarding, EQUIPMENT, EXPERIENCES, GOALS } from '../lib/onboarding.js'
 import Icon from './Icon.jsx'
+import ProgramRecommendation from './ProgramRecommendation.jsx'
+import TrainingConstraints from './TrainingConstraints.jsx'
+import { SEX_OPTIONS } from '../lib/training-evidence.js'
 import { Button, NumberField, Segmented, TextArea } from './ui.jsx'
 
 const targetGoal = goal => goal === 'lose_weight'
@@ -34,16 +34,17 @@ export default function Onboarding({ close, allowSkip = true }) {
     height: previous.height || null,
     targetWeight: previous.targetWeight || st.targetW || null, days: initialDays, programId: initialProgramId,
     experience: previous.experience || 'beginner', equipment: previous.equipment || 'full_gym',
-    body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
+    sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
+    hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
+    sex: previous.sex || null, body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
   })
   const [confirmReplace, setConfirmReplace] = useState(false)
   const [hasManualSplit, setHasManualSplit] = useState(false)
   const profileForPlan = useMemo(() => ({
-    ...profile,
+    ...profile, unit: st.unit,
     ...(hasManualSplit ? { programId: profile.programId } : { programId: undefined }),
-  }), [hasManualSplit, profile])
+  }), [hasManualSplit, profile, st.unit])
   const plan = useMemo(() => buildOnboardingProgram(profileForPlan), [profileForPlan])
-  const profileBmi = bmiFor(profile.currentWeight, profile.height, st.unit)
   const hasExistingSchedule = Object.values(st.week || {}).some(Boolean)
   const set = values => setProfile(current => ({ ...current, ...values }))
 
@@ -63,7 +64,7 @@ export default function Onboarding({ close, allowSkip = true }) {
     setStep(value => Math.min(2, value + 1))
   }
   const apply = () => {
-    update(s => { applyOnboarding(s, profile) })
+    update(s => { applyOnboarding(s, { ...profileForPlan, unit: st.unit }) })
     close()
     toast(t('Your personalized plan is ready'))
   }
@@ -100,69 +101,18 @@ export default function Onboarding({ close, allowSkip = true }) {
       <ChoiceList options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
       <h4 className="sec">{t('Available equipment')}</h4>
       <ChoiceList options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
-      <h4 className="sec">{t('Body diagram')}</h4>
-      <Segmented options={[{ value: 'male', label: t('Male') }, { value: 'female', label: t('Female') }, { value: 'none', label: t('Skip') }]} value={profile.body} onChange={body => set({ body })} />
+      <TrainingConstraints profile={profile} onChange={set} />
+      <h4 className="sec">{t('Sex (optional)')}</h4>
+      <ChoiceList options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
     </>}
     {step === 2 && <>
       <h4 className="sec">{t('Anything we should know?')}</h4>
       <p className="muted small">{t('Optional: note an injury or limitation. This app cannot provide medical advice; check with a qualified professional when needed.')}</p>
       <TextArea rows="3" maxLength="300" placeholder={t('Optional injury or limitation')} value={profile.injuryNote} onChange={event => set({ injuryNote: event.target.value })} />
-      <h4 className="sec">{t('Your recommendation')}</h4>
-      <div className="card recommendation-card" style={{ marginBottom: 12 }}>
-        <div className="recommendation-kicker"><Icon name="sparkles" />{t('Evidence-informed starting point')}</div>
-        <div className="recommendation-name">{t(plan.name)}</div>
-        <div className="recommendation-summary">{t('{0} days per week', plan.days)} · {t('{0} exercises', plan.routines.reduce((sum, routine) => sum + routine.ex.length, 0))}</div>
-        <div className="recommendation-section-label">{t('Training split')}</div>
-        <div className="recommendation-splits">
-          {[plan.recommendedProgramId, ...selectablePrograms().filter(programId => programId !== plan.recommendedProgramId)].map(programId => {
-            const program = programById(programId)
-            return <button type="button" key={programId} aria-pressed={plan.programId === programId}
-              className={`recommendation-split${plan.programId === programId ? ' on' : ''}`} onClick={() => {
-                setHasManualSplit(true)
-                set({ programId })
-              }}>
-              <span>{t(program.name)}</span>
-              {plan.recommendedProgramId === programId && <small>{t('Recommended')}</small>}
-            </button>
-          })}
-        </div>
-        <div className="recommendation-facts">
-          <div><span>{t('Goal')}</span><strong>{t(profile.goal === 'muscle' ? 'Build muscle' : profile.goal === 'strength' ? 'Build strength' : profile.goal === 'lose_weight' ? 'Lose weight' : 'General fitness')}</strong></div>
-          <div><span>{t('Equipment')}</span><strong>{t(EQUIPMENT.find(option => option.value === profile.equipment)?.label || 'Full gym')}</strong></div>
-          <div><span>{t('Experience')}</span><strong>{t(EXPERIENCES.find(option => option.value === profile.experience)?.label || 'Beginner')}</strong></div>
-          <div><span>{t('Main lifts')}</span><strong>{plan.evidence.mainSets} × {plan.evidence.mainReps}</strong></div>
-          <div><span>{t('Body weight')}</span><strong>{profile.currentWeight} {st.unit}{profileBmi ? ` · ${t('BMI')} ${profileBmi}` : ''}</strong></div>
-          <div><span>{t('Planned cardio')}</span><strong>{plan.evidence.cardioMinutes} {t('min/week')}</strong></div>
-        </div>
-        <div className="recommendation-section-label">{t('Exercises selected for your goal')}</div>
-        <div className="recommendation-exercises">
-          {plan.routines.map(routine => {
-            const exercises = routine.ex.filter(entry => entry.mode !== 'cardio')
-            return <div className="recommendation-routine" key={routine.id}>
-              <strong>{t(routine.name)}</strong>
-              <span>{exercises.slice(0, 4).map(entry => {
-                const name = EXIDX[entry.id]?.n
-                const reps = entry.repsMin > 0 && entry.repsMin < entry.reps ? `${entry.repsMin}–${entry.reps}` : entry.reps
-                return name ? `${name} — ${entry.sets}×${reps}` : null
-              }).filter(Boolean).join(' · ')}</span>
-              {exercises.length > 4 && <small>{t('+{0} more', exercises.length - 4)}</small>}
-            </div>
-          })}
-        </div>
-        {profile.goal === 'lose_weight' && profile.targetWeight > 0 && <div className="recommendation-target">
-          <Icon name="target" />{t('Weight target: {0} → {1} {2}', profile.currentWeight, profile.targetWeight, st.unit)}
-        </div>}
-        <div className="recommendation-guidance">
-          {t('Use a weight that makes the final repetitions challenging; reaching complete failure is not required.')}
-        </div>
-        {plan.evidence.additionalCardioMinutes > 0 && <div className="recommendation-guidance">
-          {t('For general health, add {0} minutes of moderate aerobic activity across the week.', plan.evidence.additionalCardioMinutes)}
-        </div>}
-        {plan.evidence.needsProfessionalReview && <div className="recommendation-warning">
-          <Icon name="info" />{t('Your limitation note needs review by a qualified professional before using this plan.')}
-        </div>}
-        <div className="small muted recommendation-note">{t('This is an evidence-informed starting point, not a guarantee. Progress gradually and adjust for recovery and pain.')}</div>
-      </div>
+      <ProgramRecommendation profile={profileForPlan} plan={plan} unit={st.unit} onChoose={programId => {
+        setHasManualSplit(!!programId)
+        set({ programId })
+      }} />
       {hasExistingSchedule && confirmReplace && <div className="card" style={{ borderColor: 'var(--orange)', marginBottom: 12 }}>
         <div className="small">{t('Your past workouts and existing routines will stay saved. The new plan will replace only your weekly schedule.')}</div>
         <div style={{ height: 10 }} /><Button variant="danger" onClick={apply}>{t('Confirm and apply plan')}</Button>
