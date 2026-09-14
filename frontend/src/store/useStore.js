@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import { api } from '../lib/api.js'
+import { needsActivation } from '../lib/activation.js'
+import { profileComplete } from '../lib/profile.js'
 import { localTZ } from '../lib/format.js'
 import { registerCustom } from '../lib/exercises.js'
 import { DEMO, DEMO_SEEDED } from '../lib/demo.js'
@@ -89,6 +91,9 @@ export const useStore = create((set, get) => {
     user: (() => { try { return JSON.parse(localStorage.getItem('gym_user')) || null } catch { return null } })(),
     revisions: (() => { try { return JSON.parse(localStorage.getItem(REV_KEY)) || { plan: 0, progress: 0 } } catch { return { plan: 0, progress: 0 } } })(),
     ready: false,
+    profileLoaded: false,
+    profileLoadError: '',
+    profileConfirmed: false,
 
     setRevisions(revisions) {
       const next = { plan: Number(revisions?.plan) || 0, progress: Number(revisions?.progress) || 0 }
@@ -117,11 +122,12 @@ export const useStore = create((set, get) => {
     setUser(u) {
       if (u) { localStorage.setItem('gym_user', JSON.stringify(u)); localStorage.removeItem('gym_guest') }
       else localStorage.removeItem('gym_user')
-      set({ user: u })
+      const changed = get().user?.id !== u?.id || (needsActivation(get().user) && !needsActivation(u))
+      set({ user: u, ...(changed ? { profileLoaded: false, profileConfirmed: false, profileLoadError: '' } : {}) })
     },
 
     async pushState() {
-      if (!get().user) return
+      if (!get().user || needsActivation(get().user) || (!get().user.admin && !profileComplete(get().S.onboarding))) return
       clearTimeout(pushTm)
       pushTm = null
       // Only one state upload may own the response at a time. Previously, two overlapping
@@ -134,6 +140,7 @@ export const useStore = create((set, get) => {
       const run = async () => {
         do {
           pushAgain = false
+          const userId = get().user?.id
           const sentState = get().S
           const sentTimestamp = sentState._ts
           try {
@@ -156,6 +163,8 @@ export const useStore = create((set, get) => {
             localStorage.removeItem('gym_dirty')
           }
           catch (e) {
+            if (e.data?.code === 'ACCOUNT_PENDING' && get().user?.id === userId) get().setUser({ ...get().user, activated: false })
+            if (e.data?.code === 'PROFILE_REQUIRED' && get().user?.id === userId) set({ profileConfirmed: false })
             localStorage.setItem('gym_dirty', '1')
             pushAgain = false
           }
@@ -175,8 +184,13 @@ export const useStore = create((set, get) => {
       }
     },
     async pullState() {
+      if (!get().user || needsActivation(get().user)) return
+      const userId = get().user.id
       try {
+        set({ profileLoadError: '' })
         const { state, revisions } = await api('/api/data')
+        if (get().user?.id !== userId) return
+        set({ profileConfirmed: profileComplete(state?.onboarding) })
         get().setRevisions(revisions)
         const S = get().S
         const dirty = localStorage.getItem('gym_dirty') === '1'
@@ -186,7 +200,13 @@ export const useStore = create((set, get) => {
           if (active) next.active = active
           persist(next, false)
         } else if (hasData(S)) { await get().pushState() }
-      } catch (e) { /* offline — keep local */ }
+      } catch (e) {
+        if (e.data?.code === 'ACCOUNT_PENDING' && get().user?.id === userId) get().setUser({ ...get().user, activated: false })
+        if (get().user?.id === userId) set({ profileLoadError: 'Unable to load your profile. Check your connection and try again.' })
+        // Offline: keep local data.
+      } finally {
+        if (get().user?.id === userId) set({ profileLoaded: true })
+      }
     },
 
     async signOut() {

@@ -94,6 +94,9 @@ export async function readClientState(pool, userId) {
 }
 
 export async function saveClientState(pool, actor, state, revisions = {}) {
+  if (state.profileImage != null && (typeof state.profileImage !== 'string' || state.profileImage.length > 300000 || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(state.profileImage))) {
+    throw Object.assign(new Error('Invalid profile photo'), { status: 400 })
+  }
   const incoming = splitState(state)
   const conn = await pool.getConnection()
   try {
@@ -138,5 +141,21 @@ export async function saveTrainerPlan(pool, trainer, clientId, plan, baseVersion
       plan_updated_by_role='trainer',plan_updated_at=CURRENT_TIMESTAMP(3) WHERE user_id=?`, [JSON.stringify(plan || {}), trainer.id, clientId])
     await conn.commit()
     return readClientState(pool, clientId)
+  } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
+}
+
+export async function deleteClientAccount(pool, id) {
+  const conn = await pool.getConnection()
+  try {
+    await conn.beginTransaction()
+    const [rows] = await conn.execute('SELECT role FROM users WHERE id=? FOR UPDATE', [id])
+    if (!rows.length) throw Object.assign(new Error('no such client'), { status: 404 })
+    if (rows[0].role !== 'client') throw Object.assign(new Error('cannot delete a trainer'), { status: 400 })
+    // Deleting a user clears invites.used_by via its foreign key. Revoke redeemed
+    // codes first so account deletion cannot make those invitations reusable.
+    await conn.execute('UPDATE invites SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3)) WHERE used_by=?', [id])
+    await conn.execute("DELETE FROM users WHERE id=? AND role='client'", [id])
+    // Foreign keys remove client state, photos, credentials and push subscriptions.
+    await conn.commit()
   } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
 }

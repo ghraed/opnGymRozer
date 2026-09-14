@@ -94,7 +94,23 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Open **http://localhost:8080**, tap **Create profile**, and you're in. First launch downloads
+Open **http://localhost:8080** and create an account. New clients can sign in but wait for
+a trainer to activate them from **Trainer → client dashboard → Activate account**.
+The waiting page checks for approval automatically. Existing accounts keep their access
+when upgrading; disabled accounts remain disabled. After activation, clients must complete
+the three profile setup pages (body details and goals, training preferences, and review)
+before accessing the app. Existing clients with incomplete profiles also complete setup;
+assigned plans and workout history are preserved.
+
+For a fresh installation, create the trainer account (replace the email and password):
+
+```bash
+docker compose --profile tools run --rm \
+  -e TRAINER_EMAIL=trainer@example.com \
+  -e TRAINER_PASSWORD='choose-a-strong-password' seed-trainer
+```
+
+First launch downloads
 the exercise media (~140 MB) once. MySQL migrations run automatically before the API starts.
 
 > Want it reachable from your phone over the internet with passkeys? You'll need an HTTPS

@@ -9,7 +9,7 @@ export function splitState(state = {}) {
     if (key === 'active' || key === '_ts') continue
     if (PLAN_KEYS.includes(key)) plan[key] = copy(value)
     else if (PROGRESS_KEYS.includes(key)) progress[key] = copy(value)
-    else settings[key] = copy(value)
+    else settings[key] = value === null ? null : copy(value)
   }
   return { settings, plan, progress, clientTimestamp: Number(state?._ts) || null }
 }

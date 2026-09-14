@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
+import { needsActivation } from '../lib/activation.js'
 import { api } from '../lib/api.js'
 import { fmtDate, fmtNum, fmtVol, fmtDur } from '../lib/format.js'
 import { workoutVolume, setsDone } from '../lib/history.js'
 import { confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
+import { ProfileAvatar } from '../components/ProfilePhoto.jsx'
 import { Button } from '../components/ui.jsx'
 import LineChart from '../components/LineChart.jsx'
 import { EXDB, EXIDX } from '../lib/exercises.js'
@@ -132,6 +134,7 @@ export default function ClientDashboard() {
   const [revision, setRevision] = useState(0)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [shown, setShown] = useState(10)
   const reload = () => setRevision(n => n + 1)
 
@@ -186,20 +189,35 @@ export default function ClientDashboard() {
     } catch (e) { toast(e.message) } finally { setPending(false) }
   }
   const setDisabled = disabled => changeAccount('/api/admin/user/disable', { disabled }, disabled ? 'User disabled' : 'User enabled')
+  const deleteAccount = async () => {
+    setPending(true)
+    try {
+      await api('/api/admin/user', { method: 'DELETE', body: JSON.stringify({ id: u.id }) })
+      toast('Client account deleted')
+      navigate('/admin', { replace: true })
+    } catch (e) { toast(e.message); setPending(false) }
+  }
   const setRole = role => changeAccount('/api/admin/user/role', { role }, role === 'trainer' ? 'Trainer access granted' : 'Trainer access removed')
 
   return <main className="client-dashboard">{header}
     {error && <div className="card" role="alert"><p>{error}</p><Button size="sm" onClick={reload}>Try again</Button></div>}
     <section className="card client-profile" aria-labelledby="client-name">
       <div className="client-identity">
-        <div className="client-avatar" aria-hidden="true">{u.name.trim().slice(0, 1).toUpperCase()}</div>
+        <ProfileAvatar value={detail.profileImage} name={u.name} className="client-avatar" />
         <div className="grow"><h2 id="client-name" className="capitalize">{u.name}</h2>
-          <div className="client-badges"><span className="tag acc">{u.admin ? 'Trainer' : 'Client'}</span><span className={'tag' + (u.disabled ? ' client-disabled' : '')}>{u.disabled ? 'Account disabled' : 'Account enabled'}</span></div>
+          <div className="client-badges"><span className="tag acc">{u.admin ? 'Trainer' : 'Client'}</span><span className={'tag' + (u.disabled ? ' client-disabled' : '')}>{u.disabled ? 'Account disabled' : needsActivation(u) ? 'Pending activation' : 'Account active'}</span></div>
           <p className="small muted">{u.created ? 'Joined ' + fmtDate(u.created.slice(0, 10)) + ' · ' : ''}Synced {rel(detail.lastSync)}</p>
         </div>
       </div>
       {!u.admin && <Button variant="primary" icon="pencil" disabled={loading || pending} onClick={() => setEditing(true)}>Edit client plan</Button>}
     </section>
+
+    {needsActivation(u) && !u.disabled && <section className="card client-activation" aria-labelledby="activation-title">
+      <div><h2 id="activation-title">Waiting for activation</h2><p className="small muted">This client can sign in, but needs your approval to access their plan and log workouts.</p></div>
+      <Button variant="primary" disabled={loading || pending} onClick={() => changeAccount('/api/admin/user/activate', {}, 'Client account activated')}>Activate account</Button>
+    </section>}
+
+
 
     <dl className="client-metrics" aria-label="Client summary">
       <div className="card"><dt>Workouts</dt><dd>{workouts.length}</dd><p>{workouts[0] ? 'Latest ' + fmtDate(workouts[0].d, true) : 'No workouts yet'}</p></div>
@@ -246,11 +264,24 @@ export default function ClientDashboard() {
     <details className="card client-account">
       <summary>Account settings</summary>
       {u.invitedBy && <p className="small muted">Invited by {u.invitedBy}</p>}
+      {!u.admin && <div className="client-access">
+        <p className="small muted">{u.disabled ? 'This account is disabled. Enable it to allow login again.' : 'Disable access temporarily, or permanently delete this client and their data.'}</p>
+        {confirmDelete ? <div className="client-delete-confirm" role="alert">
+          <h3>Delete {u.name}'s account?</h3>
+          <p className="small muted">This permanently deletes their account, profile photo, training plan, workout history, and weigh-ins. This cannot be undone.</p>
+          <div className="client-account-actions">
+            <Button autoFocus disabled={pending} onClick={() => setConfirmDelete(false)}>Cancel deletion</Button>
+            <Button variant="danger" disabled={pending} onClick={deleteAccount}>{pending ? 'Deleting…' : 'Permanently delete account'}</Button>
+          </div>
+        </div> : <div className="client-account-actions">
+          <Button disabled={pending || loading} variant={u.disabled ? 'primary' : 'tinted'} onClick={() => u.disabled ? setDisabled(false)
+            : confirmSheet({ title: 'Disable ' + u.name + '?', message: 'They will no longer be able to log in or sync. Their data stays saved, and you can enable the account again at any time.', confirmText: 'Disable account', danger: true, onConfirm: () => setDisabled(true) })}>{u.disabled ? 'Enable account' : 'Disable account'}</Button>
+          <Button disabled={pending || loading} variant="danger" icon="trash" onClick={() => setConfirmDelete(true)}>Delete account</Button>
+        </div>}
+      </div>}
       <div className="client-account-actions">
         {!u.admin && <Button disabled={pending || loading} onClick={() => setRole('trainer')}>Promote to trainer</Button>}
         {u.admin && u.id !== viewer?.id && <Button disabled={pending || loading} variant="danger" onClick={() => setRole('client')}>Demote to client</Button>}
-        {!u.admin && <Button disabled={pending || loading} variant={u.disabled ? 'primary' : 'danger'} onClick={() => u.disabled ? setDisabled(false)
-          : confirmSheet({ title: 'Disable ' + u.name + '?', message: 'They are signed out everywhere and can no longer sync or log in until re-enabled.', confirmText: 'Disable', danger: true, onConfirm: () => setDisabled(true) })}>{u.disabled ? 'Enable account' : 'Disable account'}</Button>}
         {u.id === viewer?.id && <p className="small muted">You are viewing your own trainer account.</p>}
       </div>
     </details>

@@ -2,6 +2,7 @@ import { useStore, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { passwordLogin, passwordRegister, api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
+import { needsActivation } from '../lib/activation.js'
 import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
 import { Button, Check } from '../components/ui.jsx'
@@ -20,9 +21,10 @@ function RegisterSheet({ close }) {
     try {
       const u = await passwordRegister(name.trim(), email.trim(), password, code.trim())
       setUser(u); close()
+      if (needsActivation(u)) return
       if (hasData(useStore.getState().S)) { await pushState(); useUI.getState().toast(t('Profile created — data from this device moved into it')) }
       else { await pullState(); useUI.getState().toast(t('Welcome, {0}', u.name)) }
-      onboardingSheet()
+      if (u.admin) onboardingSheet()
     } catch (e) { useUI.getState().toast(e.message || t('Registration failed')) } finally { setBusy(false) }
   }
   return <div className="auth-gold">
@@ -43,7 +45,7 @@ export default function Login() {
   const signIn = async () => {
     if (!email.trim() || !password) return useUI.getState().toast(t('Enter your email and password'))
     setBusy(true)
-    try { const u = await passwordLogin(email.trim(), password, remember); setUser(u); await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
+    try { const u = await passwordLogin(email.trim(), password, remember); setUser(u); if (needsActivation(u)) return; await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { useUI.getState().toast(e.message || t('Sign-in failed')) } finally { setBusy(false) }
   }
   const head = <img className="login-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />

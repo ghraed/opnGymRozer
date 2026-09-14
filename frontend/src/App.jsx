@@ -15,6 +15,10 @@ import Modals from './components/Modals.jsx'
 import Toast from './components/Toast.jsx'
 import RestTimer from './components/RestTimer.jsx'
 import Login from './views/Login.jsx'
+import PendingActivation from './views/PendingActivation.jsx'
+import ProfileSetup, { ProfileLoading } from './views/ProfileSetup.jsx'
+import { profileComplete } from './lib/profile.js'
+import { needsActivation } from './lib/activation.js'
 import Home from './views/Home.jsx'
 import Plan from './views/Plan.jsx'
 import RoutineEdit from './views/RoutineEdit.jsx'
@@ -152,7 +156,7 @@ function PullToRefresh() {
 function Shell() {
   const navigate = useNavigate()
   const loc = useLocation()
-  const { S, user, ready } = useStore()
+  const { S, user, ready, profileLoaded, profileConfirmed, profileLoadError } = useStore()
   const isGuest = useStore(s => s.isGuest())
   const langV = useLang()   // re-renders the whole shell when the language (pack) changes
   useSheetBackNavigation()
@@ -164,10 +168,22 @@ function Shell() {
     document.documentElement.lang = activeLang
     document.documentElement.dir = activeLang === 'ar' ? 'rtl' : 'ltr'
   }, [langV])
+  const pendingActivation = needsActivation(user)
+  const client = !!user && !user.admin
+  const profileLoading = client && !pendingActivation && (!profileLoaded || (!!profileLoadError && !profileConfirmed))
+  const setupRequired = client && !pendingActivation && !profileLoading && (!profileConfirmed || !profileComplete(S.onboarding))
+  const accessLimited = pendingActivation || profileLoading || setupRequired
+  useEffect(() => {
+    if (accessLimited) {
+      useUI.getState().closeAll()
+      useUI.getState().stopRest()
+      useUI.getState().stopWork()
+    }
+  }, [accessLimited])
   // every tab/route change starts at the top of the page
   useEffect(() => { window.scrollTo(0, 0) }, [loc.pathname])
   // bound to the workout, not to the route — checking Stats mid-session keeps the screen on
-  useWakeLock(!!S.active && S.keepAwake !== false)
+  useWakeLock(!accessLimited && !!S.active && S.keepAwake !== false)
 
   const authed = user || isGuest
   if (!ready && !authed) return (
@@ -184,7 +200,9 @@ function Shell() {
           re-mounts the boundary, so the tab bar is always a way out */}
       <div id="app" className="vfade" key={loc.pathname}>
         <ErrorBoundary>
-          {!authed ? <Login /> : (
+          {!authed ? <Login /> : pendingActivation ? <PendingActivation /> : profileLoading ? <ProfileLoading error={profileLoadError} /> : setupRequired ? (
+            <Routes><Route path="/setup/:step" element={<ProfileSetup />} /><Route path="*" element={<Navigate to="/setup/1" replace />} /></Routes>
+          ) : (
             <Routes>
               <Route path="/home" element={<Home />} />
               <Route path="/plan" element={<Plan />} />
@@ -201,9 +219,7 @@ function Shell() {
           )}
         </ErrorBoundary>
       </div>
-      <TabBar onStart={startFlow} />
-      <RestTimer />
-      <PullToRefresh />
+      {!accessLimited && <><TabBar onStart={startFlow} /><RestTimer /><PullToRefresh /></>}
       <Modals />
       <Toast />
     </>

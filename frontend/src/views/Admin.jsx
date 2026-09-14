@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
+import { needsActivation } from '../lib/activation.js'
 import { fmtDate } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
@@ -68,7 +69,7 @@ export default function Admin() {
 
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
-  const disabledCount = (users || []).filter(u => u.disabled).length
+  const pendingCount = (users || []).filter(u => needsActivation(u) && !u.disabled).length
   const visibleUsers = (users || []).filter(u => u.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
 
   return <div className="narrow">
@@ -82,7 +83,7 @@ export default function Admin() {
       <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '—'}</div></div>
       <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '—'}</div></div>
       <div className="tile"><div className="l">Active 7d</div><div className="v">{users ? activeCount : '—'}</div></div>
-      <div className="tile"><div className="l">Disabled</div><div className="v">{users ? disabledCount : '—'}</div></div>
+      <div className="tile"><div className="l">Awaiting activation</div><div className="v">{users ? pendingCount : '—'}</div></div>
     </div>
 
     {liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
@@ -104,7 +105,7 @@ export default function Admin() {
     </div>
     <div className="list">
       {visibleUsers.map(u => <Link key={u.id} to={'/admin/clients/' + encodeURIComponent(u.id)} state={{ fromTrainer: true }} className="item admin-client-link" style={u.disabled ? { opacity: .55 } : null}>
-          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>trainer</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
+          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {needsActivation(u) && !u.disabled && <span className="tag acc">Pending activation</span>}{u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>trainer</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
           <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · synced ' + rel(u.lastSync)}</div></div>
         {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
       </Link>)}

@@ -244,7 +244,7 @@ export function buildOnboardingProgram(profile = {}) {
 }
 
 /** Apply an onboarding result to a state draft. Workout history is intentionally untouched. */
-export function applyOnboarding(state, profile = {}, now = Date.now()) {
+export function applyOnboarding(state, profile = {}, now = Date.now(), { preservePlan = false } = {}) {
   const plan = buildOnboardingProgram(profile)
   const currentWeight = Math.round(Number(profile.currentWeight) * 10) / 10
   const height = Number(profile.height) > 0 ? Math.round(Number(profile.height) * 10) / 10 : null
@@ -253,18 +253,20 @@ export function applyOnboarding(state, profile = {}, now = Date.now()) {
   // Persist the resolved recommendation as the selected program. Fresh onboarding profiles
   // intentionally omit programId until the user either accepts the recommendation or chooses
   // another split.
-  state.onboarding = { ...profile, programId: plan.programId, currentWeight, height, targetWeight, completedAt: now }
+  state.onboarding = { ...profile, programId: preservePlan ? state.onboarding?.programId || null : plan.programId, currentWeight, height, targetWeight, completedAt: now }
   if (profile.body === 'male' || profile.body === 'female') state.body = profile.body
   const today = todayISO(), entry = state.bodyweight.find(item => item.d === today)
   if (entry) { entry.w = currentWeight; entry.t = now }
   else state.bodyweight.push({ d: today, w: currentWeight, t: now })
   state.bodyweight.sort((a, b) => String(a.d).localeCompare(String(b.d)))
   state.targetW = targetWeight
-  state.routines.push(...plan.routines)
-  state.week = plan.week
-  // Date-specific overrides belong to the schedule they were created against. Keeping an
-  // old "rest" or rescheduled routine here can make the freshly applied plan appear missing
-  // on Home even though the weekly assignments were saved correctly.
-  state.dayPlan = {}
+  if (!preservePlan) {
+    state.routines.push(...plan.routines)
+    state.week = plan.week
+    // Date-specific overrides belong to the schedule they were created against. Keeping an
+    // old "rest" or rescheduled routine here can make the freshly applied plan appear missing
+    // on Home even though the weekly assignments were saved correctly.
+    state.dayPlan = {}
+  }
   return plan
 }

@@ -2,6 +2,12 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { joinState, mergeProgress, splitState } from '../state.js'
 
+test('clearing an optional profile photo preserves null through state serialization', () => {
+  const { settings } = splitState({ profileImage: null, targetW: null })
+  assert.equal(settings.profileImage, null)
+  assert.equal(joinState({ settings_json: settings }).profileImage, null)
+})
+
 test('splitState separates plans, progress, settings and removes active workout', () => {
   const source = { unit: 'kg', theme: 'dark', routines: [{ id: 'r1' }], week: { 1: 'r1' }, dayPlan: {}, customEx: [], workouts: [{ id: 'w1' }], bodyweight: [{ d: '2026-01-01', w: 80 }], exWeights: { e1: 10 }, active: { id: 'live' }, _ts: 42 }
   const parts = splitState(source)

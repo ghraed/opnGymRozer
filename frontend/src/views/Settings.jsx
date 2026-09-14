@@ -12,6 +12,7 @@ import { DEMO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp, onboardingSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
+import ProfilePhoto from '../components/ProfilePhoto.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
 const SHOW_EFFORT_UI = false
@@ -88,6 +89,8 @@ export default function Settings() {
       </>}
     </Section>
     {!user && !DEMO && !MOBILE && <p className="sect-f" style={{ marginTop: -18, marginBottom: 22 }}>{t('Guest mode — data lives only in this browser.')}</p>}
+
+    <section className="card"><ProfilePhoto value={S.profileImage} name={user?.name} onChange={profileImage => update(s => { s.profileImage = profileImage })} /></section>
 
     {/* ---------- general ---------- */}
     <Section title={t('General')} footer={t('Note: switching units only changes the label — logged numbers are not converted.')}>

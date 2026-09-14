@@ -8,6 +8,7 @@ import { bwSheet, goalSheet, dayOverrideSheet, calendarSheet, startFlow, loadSta
 import LineChart from '../components/LineChart.jsx'
 import BmiCard from '../components/BmiCard.jsx'
 import Icon from '../components/Icon.jsx'
+import { ProfileAvatar } from '../components/ProfilePhoto.jsx'
 import { Button } from '../components/ui.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 import { bmiFor } from '../lib/bmi.js'
@@ -67,7 +68,7 @@ export default function Home() {
         </div>}
         <div className="sub">{today.toLocaleDateString(dateLocale(), { weekday: 'long', day: 'numeric', month: 'long' })}</div>
       </div>
-      <button className="iconbtn" onClick={() => nav('/settings')} aria-label={t('Settings')}><Icon name="gear" /></button>
+      <button className={"iconbtn" + (S.profileImage ? " profile-settings-button" : "")} onClick={() => nav('/settings')} aria-label={t('Settings')}>{S.profileImage ? <ProfileAvatar value={S.profileImage} name={user?.name} /> : <Icon name="gear" />}</button>
     </div>
 
     <div className="card">
