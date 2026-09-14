@@ -1123,3 +1123,64 @@ h4.sec{
 .drop-set-banner > :first-child { color: var(--acc); font-size: 24px; flex-shrink: 0; }
 .drop-set-banner strong { display: block; color: var(--acc); font-size: 18px; }
 .drop-set-banner strong + div { margin-top: 3px; font-size: 13px; line-height: 1.4; }
+
+/* Client dashboard: phone-first cards, with room to compare progress on desktop. */
+.admin-client-link{color:var(--label);min-width:0;min-height:44px;overflow-wrap:anywhere}
+.admin-client-link>.grow,.admin-client-link>div{min-width:0}
+.client-dashboard{max-width:1000px;margin:0 auto;overflow-wrap:anywhere}
+.client-header{align-items:center;gap:10px}
+.client-header .grow{min-width:0;flex:1}
+.client-header .iconbtn{width:44px;height:44px}
+.client-header h1{font-size:clamp(22px,6vw,30px);margin-top:3px}
+.client-header .iconbtn:disabled{opacity:.35}
+.client-profile{display:flex;flex-direction:column;gap:18px}
+.client-identity{display:flex;align-items:center;gap:12px;min-width:0}
+.client-identity .grow{min-width:0}
+.client-profile h2{font-size:24px;font-weight:600;color:var(--label);margin:0}
+.client-profile p{margin-top:8px;line-height:1.5}
+.client-avatar{width:52px;height:52px;flex:none;border-radius:16px;background:var(--acc-soft);color:var(--acc);display:grid;place-items:center;font-size:25px;font-weight:600}
+.client-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.client-disabled{color:var(--red)}
+.client-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0 0 16px}
+.client-metrics .card{margin:0;min-width:0;padding:14px}
+.client-metrics dt,.client-metrics p{font-size:13px;color:var(--label-2)}
+.client-metrics dd{font-size:28px;font-weight:600;margin:8px 0 4px;line-height:1.15}
+.client-metrics dd small{font-size:15px;font-weight:400;color:var(--label-2)}
+.client-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;align-items:start}
+.client-section{min-width:0;margin:0}
+.client-section-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.client-section-header h2{margin:0;font-size:19px;font-weight:500;color:var(--label)}
+.client-weight-change{margin-bottom:14px}
+.client-list{margin-top:8px}
+.client-row{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;padding:14px 0;border-bottom:var(--hair) solid var(--sep)}
+.client-row:last-child{border-bottom:0;padding-bottom:0}
+.client-row>.grow{flex:1 1 160px;min-width:0}
+.client-row-title{display:block;font-size:16px;font-weight:500;line-height:1.35;margin-bottom:4px}
+.client-row .small{line-height:1.5}
+.client-routine+.client-routine{border-top:var(--hair) solid var(--sep)}
+.client-routine summary{padding:12px 0;min-height:56px;cursor:pointer}
+.client-routine summary .grow{display:inline-block;vertical-align:middle;max-width:calc(100% - 24px)}
+.client-routine-exercises{padding:0 0 12px 16px}
+.client-more{margin-top:16px}
+.client-account{margin-top:16px}
+.client-account summary{cursor:pointer;min-height:44px;padding:11px 0;font-size:16px;font-weight:500}
+.client-account-actions{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.client-state{padding:28px 16px;display:flex;flex-direction:column;gap:16px;text-align:center}
+.client-editor{max-width:720px}
+.client-editor .row{flex-wrap:wrap}
+.client-editor .row>.input{flex:1;min-width:0;width:auto}
+.client-editor label{min-width:0}
+.client-editor .input{font-size:16px}
+.client-editor .iconbtn{width:44px;height:44px}
+#app .client-editor .list{display:flex;flex-direction:column}
+.client-editor .row>.btn{flex:1 1 180px}
+.client-editor .list .row>span{flex:1;min-width:0}
+@media(min-width:700px){
+  #app:has(.client-dashboard){max-width:1080px}
+  .client-profile{flex-direction:row;align-items:center;justify-content:space-between}
+  .client-profile>.btn{width:auto;flex:none}
+  .client-metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .client-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .client-account-actions{flex-direction:row}
+  .client-account-actions>.btn{width:auto}
+}
