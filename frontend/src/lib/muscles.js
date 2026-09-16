@@ -7,6 +7,7 @@
 // map can actually draw, via ALIAS below. Anything genuinely undrawable (hands,
 // ankles, "cardiovascular system") maps to null and is dropped rather than guessed at.
 
+import { modeOf } from './history.js'
 import { EXIDX } from './exercises.js'
 
 // The muscles a map can shade, in head-to-toe order — also the order of any list
@@ -138,4 +139,23 @@ export function rankOf(load) {
   const worked = MUSCLES.filter(m => (load[m] || 0) > 0).sort((a, b) => load[b] - load[a])
   const missed = MUSCLES.filter(m => !(load[m] > 0))
   return { worked, missed }
+}
+
+/** Actual completed work; count a set once for each muscle it involves. */
+export function completedMuscleWork(workouts) {
+  const totals = Object.fromEntries(MUSCLES.map(m => [m, { sets: 0, reps: 0 }]))
+  for (const workout of workouts || []) {
+    for (const entry of workout.entries || []) {
+      const muscles = Object.keys(musclesOf(EXIDX[entry.id]))
+      const repsMode = modeOf({ ...entry.target, id: entry.id }) === 'reps'
+      for (const set of entry.sets || []) {
+        if (!set.done) continue
+        for (const muscle of muscles) {
+          totals[muscle].sets++
+          if (repsMode) totals[muscle].reps += Math.max(0, Number(set.r) || 0)
+        }
+      }
+    }
+  }
+  return totals
 }

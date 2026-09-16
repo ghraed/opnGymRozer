@@ -51,7 +51,7 @@ describe('weekly workload accounting and personalization', () => {
     const plan = buildOnboardingProgram({ ...profile, programId: 'upper_lower' })
     expect(plan.evidence).toMatchObject({ minExerciseSets: 3, maxExerciseSets: 3 })
     const upper = plan.routines.find(r => r.name === 'Upper A')
-    const accessories = upper.ex.filter(e => !e.compound)
+    const accessories = plan.routines.flatMap(r => r.ex).filter(e => !e.compound)
     expect(new Set(upper.ex.map(e => e.sets))).toEqual(new Set([3]))
     expect(accessories.some(e => e.id === '0334' && e.repsMin === 12 && e.reps === 20)).toBe(true)
     expect(muscle(plan, 'triceps').indirect).toBeGreaterThan(0)

@@ -139,10 +139,10 @@ describe('research-informed onboarding recommendations', () => {
     expect(trained.evidence.additionalCardioMinutes).toBe(60)
   })
 
-  it('does not invent sex- or BMI-based loads and splits, or use the diagram as sex', () => {
+  it('does not infer lifting ability or physique focus from BMI or the body diagram', () => {
     const base = { goal: 'strength', days: 4, experience: 'intermediate', equipment: 'full_gym' }
-    const expected = stripIds(buildOnboardingProgram(base))
     for (const sex of ['female', 'male', 'unspecified']) {
+      const expected = stripIds(buildOnboardingProgram({ ...base, sex }))
       for (const [currentWeight, height, unit] of [[55, 155, 'kg'], [130, 195, 'kg'], [286.6, 195, 'lb']]) {
         expect(stripIds(buildOnboardingProgram({ ...base, sex, body: 'female', currentWeight, height, unit }))).toEqual(expected)
       }
@@ -172,7 +172,7 @@ describe('research-informed onboarding recommendations', () => {
     expect(Object.keys(state.week)).toHaveLength(3)
     expect(Object.values(state.week).every(id => state.routines.some(r => r.id === id))).toBe(true)
     expect(state.dayPlan).toEqual({})
-    expect(state.customEx).toEqual([WALKING_EXERCISE, ...EXTRA_EXERCISES])
+    expect(state.customEx).toEqual([WALKING_EXERCISE, ...EXTRA_EXERCISES.filter(ex => ex.id === 'og-db-floor-press')])
     expect(state.onboarding.trainingAssessment.weeklyVolume).toHaveLength(10)
   })
 })

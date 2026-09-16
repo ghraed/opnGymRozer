@@ -10,7 +10,7 @@ import LineChart from '../components/LineChart.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import Icon from '../components/Icon.jsx'
 import BodyMap, { BodyMapLegend } from '../components/BodyMap.jsx'
-import { loadOfWorkouts, rankOf, MUSCLE_NAME } from '../lib/muscles.js'
+import { loadOfWorkouts, rankOf, MUSCLE_NAME, MUSCLES, completedMuscleWork } from '../lib/muscles.js'
 import { e1rmSeries, best1RM } from '../lib/onerm.js'
 import {
   hasEffort, displayScale, scaleName, toScale, avgRir, effortSummary, effortWeeks,
@@ -74,6 +74,32 @@ function MuscleBalance({ S, useEffort }) {
           ? t('Every muscle group got at least one hard set in this period.')
           : t('Every muscle group got some work in this period.')}</div>}
     </> : <div className="muted small">{t('No workouts in this period yet.')}</div>}
+  </div>
+}
+
+function MuscleWork({ S }) {
+  const [win, setWin] = useState(7)
+  const today = todayISO()
+  const workouts = S.workouts.filter(w => win === 0 || (win === 7
+    ? weekKey(w.d) === weekKey(today)
+    : new Date(w.d + 'T12:00:00').getTime() >= new Date(today + 'T12:00:00').getTime() - (win - 1) * 86400000))
+  const includeActive = S.active && (win === 0 || (win === 7
+    ? weekKey(S.active.d || today) === weekKey(today)
+    : S.active.start >= Date.now() - win * 86400000))
+  const totals = completedMuscleWork(includeActive ? [...workouts, S.active] : workouts)
+  return <div className="card">
+    <h2>{t('Sets and reps by muscle')}</h2>
+    <Segmented className="seg-range" value={win} onChange={setWin}
+      options={[{ value: 7, label: t('Week') }, { value: 30, label: '30d' }, { value: 90, label: '90d' }, { value: 0, label: t('All') }]} />
+    <p className="small dim">{t('Completed sets only. Each set counts for every primary and supporting muscle involved. Timed sets count as sets, not reps.')}</p>
+    {includeActive && <p className="small accent">{t('Includes completed sets from your current workout.')}</p>}
+    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'start' }}>
+      <thead><tr><th scope="col">{t('Muscle')}</th><th scope="col">{t('Sets')}</th><th scope="col">{t('Reps')}</th></tr></thead>
+      <tbody>{MUSCLES.map(m => <tr key={m} style={{ borderTop: 'var(--hair) solid var(--sep)' }}>
+        <th scope="row" style={{ padding: '8px 0', fontWeight: 400 }}>{t(MUSCLE_NAME[m])}</th>
+        <td>{fmtNum(totals[m].sets)}</td><td>{fmtNum(totals[m].reps)}</td>
+      </tr>)}</tbody>
+    </table>
   </div>
 }
 
@@ -211,6 +237,7 @@ export default function Stats() {
       <Heatmap S={S} onDay={iso => { const ws = S.workouts.filter(w => w.d === iso); if (ws.length === 1) workoutDetailSheet(ws[0]); else if (ws.length) calendarSheet(iso) }} />
     </div>
 
+    <MuscleWork S={S} />
     {S.workouts.length > 0 && <MuscleBalance S={S} useEffort={SHOW_EFFORT_UI} />}
     {SHOW_EFFORT_UI && anyEffort && <EffortCard S={S} />}
 

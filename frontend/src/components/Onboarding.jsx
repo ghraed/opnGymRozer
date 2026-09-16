@@ -1,3 +1,4 @@
+import { physiqueFocusFor } from '../lib/physique-focus.js'
 import { useMemo, useState } from 'react'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
@@ -104,6 +105,7 @@ export default function Onboarding({ close, allowSkip = true }) {
       <TrainingConstraints profile={profile} onChange={set} />
       <h4 className="sec">{t('Sex (optional)')}</h4>
       <ChoiceList options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
+          <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
     </>}
     {step === 2 && <>
       <h4 className="sec">{t('Anything we should know?')}</h4>

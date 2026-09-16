@@ -5,6 +5,9 @@
 export const EXTRA_EXERCISES = [{
   id: 'og-db-floor-press', n: 'dumbbell floor press', bp: 'chest', tg: 'pectorals', eq: 'dumbbell', custom: true,
   st: ['Lie on the floor with knees bent and a dumbbell in each hand.', 'Keep wrists over elbows and lower with control until the upper arms gently reach the floor.', 'Press upward without bouncing; use a comfortable, controlled load.'],
+}, {
+  id: 'og-db-glute-bridge', n: 'dumbbell glute bridge', bp: 'upper legs', tg: 'glutes', eq: 'dumbbell', custom: true,
+  st: ['Lie on your back with knees bent and feet flat on the floor.', 'Hold a padded dumbbell securely across your hips.', 'Lift your hips using your glutes without arching your lower back, then lower with control.'],
 }]
 const family = (label, main, full, dumbbells, bodyweight, novice = []) => ({
   label, main, full, dumbbells, bodyweight, novice,
@@ -26,6 +29,7 @@ export const MOVEMENTS = {
   knee: family('Knee extension accessory', false, ['0585'], ['1760', '0413'], ['1685']),
   hamstrings: family('Knee flexion / posterior chain', false, ['0586', '0599'], ['0300'], ['3013']),
   calves: family('Calf raise', false, ['0605', '0594', '1396'], ['0417', '1373'], ['1373']),
+  gluteExtension: family('Hip extension', false, ['1409'], ['og-db-glute-bridge'], ['3013'], ['3013']),
   hips: family('Hip accessory', false, ['0598'], ['0413'], ['3013']),
   core: family('Trunk control', false, ['0276', '0175', '0472', '0687'], ['0276'], ['0276'], ['0276']),
   scapula: family('Scapular control', false, ['3021'], ['3021'], ['3021']),
@@ -34,6 +38,9 @@ export const MOVEMENTS = {
   shoulderAccessory: family('Shoulder accessory', false, ['0334', '0383'], ['0334', '0383'], ['3021']),
   forearms: family('Grip / elbow flexion accessory', false, ['0313'], ['0313'], ['2300']),
 }
+
+MOVEMENTS.gluteExtension.sourceIds = ['acsm2026', 'iusca2021', 'glutes2023']
+MOVEMENTS.sideDelt.sourceIds = ['acsm2026', 'iusca2021', 'delts2025']
 
 const SOURCE_FAMILY = {}
 for (const [key, value] of Object.entries(MOVEMENTS)) {
@@ -54,6 +61,7 @@ credit(['2330', '0652', '1326'], { back: 1, biceps: 0.5 }, true)
 credit(['0043', '0739', '1760', '0413', '0410', '3470', '1685'], { quads: 1, glutes: 0.5 }, true)
 credit(['0085', '0300'], { hamstrings: 1, glutes: 1 }, true)
 credit(['0032'], { glutes: 1, hamstrings: 0.5, back: 0.5 }, true)
+credit(['1409', 'og-db-glute-bridge'], { glutes: 1 })
 credit(['3013'], { glutes: 1, hamstrings: 0.5 }, true)
 credit(['0426', '0405'], { shoulders: 1, triceps: 0.5 }, true)
 credit(['0227', '0308'], { chest: 1 })

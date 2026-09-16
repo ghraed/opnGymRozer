@@ -1,3 +1,4 @@
+import { physiqueFocusFor } from '../lib/physique-focus.js'
 import { useEffect, useMemo, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -120,6 +121,7 @@ export default function ProfileSetup() {
           <TrainingConstraints profile={profile} onChange={set} />
           <h2 className="setup-section-title">{t('Sex (optional)')}</h2>
           <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
+          <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
         </section>}
         {step === 2 && <>
           <section className="card"><h2>{t('Your profile')}</h2><dl className="setup-summary">
@@ -127,6 +129,7 @@ export default function ProfileSetup() {
           </dl>
             <h3 className="setup-section-title">{t('Sex (optional)')}</h3>
             <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
+          <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
           </section>
           <section className="card"><label className="setup-note">{t('Anything we should know?')}<span className="small muted">{t('Optional injury or limitation')}</span><TextArea rows="3" maxLength="300" value={profile.injuryNote} onChange={event => set({ injuryNote:event.target.value })} /></label></section>
           {hasExistingPlan && <section className="card"><h2>{t('Your current plan')}</h2><p className="small muted">{t('You already have a plan. Keep its schedule, or use the program selected below. Previous routines and workout history stay saved.')}</p>

@@ -1,6 +1,6 @@
 # Training recommendation evidence
 
-Reviewed 14 September 2026; policy version `2026-09-14-v3`.
+Reviewed 17 September 2026; policy version `2026-09-17-v4`.
 
 Setup step 3, the fitness profile editor, and installing a starter program for a completed
 profile use the same planner. All four splits are evaluated against the profile before the
@@ -20,7 +20,7 @@ individual recommendations.
 | Session time | 30, 45, 60, 75 or 90 minutes; constrains exercise selection and aerobic finishers. Time includes an estimated warm-up, setup, repetition time and rest. Actual duration varies. |
 | Equipment | Explicit movement families select available variants. Home clients confirm a bench or secure stations for both rows and pull-ups. Without a bench, dumbbell pressing uses the floor. Unavailable pulling work remains a visible gap. |
 | Weight / height | Recorded with the current weight unit and displayed for progress tracking and trainer assessment of equipment fit. They cannot establish strength or limb proportions, so they do not determine loads or exclude movements. |
-| Sex | Optional and independent of the diagram. Preserved in the assessment; it does not automatically change split, volume or load. Similar relative hypertrophy responses do not justify an invented sex-based formula. |
+| Sex | Optional and independent of the diagram. Female selects the feminine/glute-and-leg focus; male selects the muscular V-shape/back-and-shoulder focus; unspecified keeps balanced development. This mapping is a product physique goal, not a biological requirement. Loads are never calculated from sex. |
 | Injury / limitation note | Requests trainer and, where appropriate, clinical review. Free text does not diagnose conditions or generate rehabilitation prescriptions. |
 
 New time, recovery and equipment fields are optional for existing profiles. Defaults are
@@ -150,3 +150,36 @@ recompute it. Existing assigned schedules are preserved unless replacement is ex
 chosen. Past routines and workout history remain saved. Tests cover profile combinations,
 independent direct/indirect arithmetic, actual substitutions, time and set caps, recovery,
 effort/rest, source coverage and persistence.
+
+## Physique emphasis (v4)
+
+The requested female/male mapping changes generated plans across all four splits and goals.
+Female prioritizes glutes, hamstrings and quadriceps; male prioritizes back and shoulders.
+The remaining muscle targets stay in place, as do goal-specific cardio and strength work.
+All split candidates are evaluated using the same emphasis; picking another split does not
+remove it. Existing plans remain preserved unless the user chooses regeneration.
+
+Priority muscles have twice the deficit weight in exercise allocation and split scoring.
+Experienced clients with normal recovery receive a target one three-set block higher for
+those muscles; beginners/returners keep the original target with changed selection priority.
+These exact priorities and additions are product heuristics, not study-derived sex formulas.
+Time, equipment and per-session caps still apply and unmet targets remain visible.
+
+Lower-body sessions can offer floor hip extensions alongside squats and hinges. Back days
+can offer vertical pulling and rear-shoulder work; upper-body sessions can offer lateral
+raises. Full-body templates can offer both patterns. Substitution still uses reviewed
+movement families and actual muscle credits. No unavailable equipment is silently assumed.
+
+- [Plotkin et al. (2023)](https://pubmed.ncbi.nlm.nih.gov/37877099/): in 34 untrained
+  participants, nine weeks of squat or hip-thrust training produced similar glute growth,
+  while squats produced more thigh growth. Floor bridges are a practical adaptation;
+  they were not the tested hip-thrust intervention.
+- [Lateral raise trial (2025)](https://pmc.ncbi.nlm.nih.gov/articles/PMC12277279/):
+  dumbbell and cable lateral raises both increased lateral-deltoid size in trained adults.
+  Supports direct shoulder work, not a specific guaranteed silhouette.
+- [Sex meta-analysis (2025)](https://pubmed.ncbi.nlm.nih.gov/40028215/): similar relative
+  hypertrophy potential supports using shared training principles. Neither this review nor
+  the trials validate sex-based aesthetic restrictions or guarantee body proportions.
+
+Labels describe the selected goal. They do not promise changes to skeletal structure,
+spot fat reduction, or removal of all training for other muscle groups.

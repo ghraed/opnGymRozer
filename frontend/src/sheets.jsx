@@ -508,7 +508,7 @@ function usageMap(st) {
   st.workouts.forEach(w => w.entries.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
   return u
 }
-function ExercisePicker({ onPick, close, filter }) {
+function ExercisePicker({ onPick, close, filter, title }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
@@ -530,7 +530,7 @@ function ExercisePicker({ onPick, close, filter }) {
   const chosenCount = scope.filter(e => usage[e.id]).length
   const bodyParts = BODYPARTS.filter(part => scope.some(e => e.bp === part))
   return <>
-    <h3>{t('Add exercise')}</h3>
+    <h3>{title || t('Add exercise')}</h3>
     {filter && !expanded && <div className="small muted" style={{ marginBottom: 10 }}>{t('Showing exercises related to {0}.', t(filter.label))}</div>}
     <div className="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search {0} exercises…', scope.length)} value={q} onChange={e => { setQ(e.target.value); setShown(50) }} /></div>
@@ -558,7 +558,7 @@ function ExercisePicker({ onPick, close, filter }) {
     {filter && !expanded && <><div style={{ height: 8 }} /><Button variant="tinted" icon="plus" onClick={() => { setExpanded(true); setBp(''); setEq(''); setShown(50) }}>{t('Expand to all exercises')}</Button></>}
   </>
 }
-export const exercisePicker = (onPick, options = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} filter={options.filter} />)
+export const exercisePicker = (onPick, options = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} filter={options.filter} title={options.title} />)
 
 /* ============================ exercise config ============================ */
 // Progression settings for one exercise (issue #17). Shown inside the config sheet because

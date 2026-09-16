@@ -3,6 +3,7 @@ import { todayISO, uid } from './format.js'
 import { movementFor, selectMovement, EXTRA_EXERCISES } from './training-movements.js'
 import { TRAINING_POLICY_VERSION, TRAINING_SOURCES } from './training-evidence.js'
 import { allocateWeeklySets, trainingConstraints } from './training-volume.js'
+import { physiqueFocusFor } from './physique-focus.js'
 import { EXIDX } from './exercises.js'
 
 export const GOALS = [
@@ -76,15 +77,27 @@ function applyPrescription(entry, profile) {
 
 function adaptRoutine(routine, profile) {
   const used = new Set()
+  const entries = routine.ex.map(entry => {
+    const replacement = selectMovement(entry, profile, used)
+    if (!replacement) return null
+    used.add(replacement.id)
+    return replacement
+  }).filter(Boolean)
+  const focus = physiqueFocusFor(profile)
+  const has = muscle => entries.some(e => e.muscles[muscle] > 0)
+  // Add candidates only to an appropriate day; the volume/time allocator decides
+  // what fits. Keep push/pull and upper/lower days faithful to the chosen split.
+  const candidates = focus.id === 'feminine' && has('glutes') ? ['1409']
+    : focus.id === 'v_shape' ? [...(has('back') ? ['2330', '0383'] : []), ...(has('shoulders') ? ['0334'] : [])] : []
+  for (const id of candidates) {
+    if (entries.some(e => e.movement === movementFor(id)?.label)) continue
+    const entry = selectMovement({ id }, profile, used)
+    if (entry) { entries.push(entry); used.add(entry.id) }
+  }
   return {
     ...routine,
     prog: profile.goal === 'muscle' || profile.goal === 'gain_weight' ? 'double' : 'linear',
-    ex: routine.ex.map(entry => {
-      const replacement = selectMovement(entry, profile, used)
-      if (!replacement) return null
-      used.add(replacement.id)
-      return replacement
-    }).filter(Boolean).sort((a, b) => Number(b.mainLift) - Number(a.mainLift))
+    ex: entries.sort((a, b) => Number(b.mainLift) - Number(a.mainLift))
       .map(entry => applyPrescription(entry, profile)),
   }
 }

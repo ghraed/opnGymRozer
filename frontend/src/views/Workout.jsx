@@ -11,7 +11,8 @@ import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
 import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
-import { Button, Check, NumberField } from '../components/ui.jsx'
+import { replacementConfig, replacementFilter, replaceActiveEntry } from '../lib/exercise-actions.js'
+import { Button, Check, NumberField, SelectRow } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
 import { glyphOf } from '../lib/glyphs.js'
 
@@ -57,7 +58,7 @@ function Elapsed({ start }) {
 }
 
 /* ---------- one exercise block (reps: weight×reps · time: a held duration · cardio: duration+speed) ---------- */
-function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onAddDrop, onRemoveSet, onStartTimed }) {
+function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onAddDrop, onRemoveSet, onStartTimed, onReplace, onRemove }) {
   const S = useStore(s => s.S)
   const working = useUI(s => s.work)
   const entry = S.active.entries[entryIdx]
@@ -76,6 +77,8 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onAddDr
   // stepper instead of two, which is the whole point of the flag. Adding a belt weight in the
   // config brings it back, now labelled as the addition it is.
   const cfg = { ...(entry.target || {}), id: entry.id }
+  const repRange = mode === 'reps' && cfg.repsMin > 0 && cfg.repsMin < cfg.reps
+    ? `${fmtNum(cfg.repsMin)}–${fmtNum(cfg.reps)}` : null
   const bw = !cardio && isBw(cfg)
   const added = bw && entry.sets.some(s => s.w > 0)
   const loadCol = { f: 'w', step: 2.5, dec: true, hd: bw ? t('Added ({0})', S.unit) : t('Weight ({0})', S.unit) }
@@ -117,6 +120,10 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onAddDr
       <Icon name="arrowDown" />
       <div><strong>{t('Drop set')}</strong><div>{t('Complete the drop rows back-to-back without rest.')}</div></div>
     </div>}
+    <div className="row" style={{ gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <Button size="sm" icon="shuffle" disabled={!!working} onClick={onReplace}>{t('Replace exercise')}</Button>
+      <Button size="sm" icon="trash" disabled={!!working} onClick={onRemove}>{t('Remove exercise')}</Button>
+    </div>
     <Media ex={ex} key={entry.id} compact={compact} minimizable />
     <div className="row between" style={{ marginBottom: 6 }}>
       <div style={{ fontSize: compact ? 17 : 20, fontWeight: 600, letterSpacing: '-.02em', textTransform: 'capitalize', lineHeight: 1.2 }}>{ex.n}</div>
@@ -138,6 +145,11 @@ function ExerciseBlock({ entryIdx, compact, onToggle, onField, onAddSet, onAddDr
       <span>{t(...plan.why)}</span>
     </div>}
     <div className="card" style={{ marginTop: 10, marginBottom: 0 }}>
+      {repRange && <div style={{ marginBottom: 12 }}>
+        <div className="accent" style={{ fontWeight: 600 }}>{t('Target: {0} reps per set', repRange)}</div>
+        {isPerSide(cfg) && <div className="small dim">{t('{0} per side', `${fmtNum(sideReps(cfg.repsMin))}–${fmtNum(sideReps(cfg.reps))}`)}</div>}
+        <div className="small dim">{t('Enter the actual reps you complete in each set.')}</div>
+      </div>}
       {/* the header carries the same eff3 sizing as the rows, or the labels drift off their columns */}
       <div className={'sethead' + (col3 ? ' eff3' : '')}><span className="n-sp" /><span className="w-sp">{col1.hd}</span>{col2 && <span className="r-sp">{col2.hd}</span>}{col3 && <span className="eff-sp">{col3.hd}</span>}{timed && <span className="ck-sp" />}<span className="ck-sp" /></div>
       {entry.sets.map((s, i) => <div key={i} className={'setrow' + (s.done ? ' done' : '') + (col3 ? ' eff3' : '')}>
@@ -190,6 +202,29 @@ function ActiveWorkout() {
       if (v == null) delete e.sets[i][field]; else e.sets[i][field] = v
     })
   }
+  const replaceExercise = idx => {
+    const entry = A.entries[idx]
+    const picker = exercisePicker(ex => {
+      if (ex.id === entry.id) return
+      picker.close()
+      const remaining = entry.sets.filter(s => !s.done && !s.drop).length
+      exConfigSheet(ex, replacementConfig({ ...entry.target, id: entry.id }, ex.id, remaining), cfg => {
+        stopRest()
+        update(s => {
+          if (!s.active) return
+          const full = { ...cfg, id: ex.id }
+          replaceActiveEntry(s.active, idx, { id: ex.id, target: full, sets: addPlannedDrops(buildSets(s, full), full) })
+        }, true)
+      }, null, S.routines.find(r => r.id === A.routineId))
+    }, { filter: replacementFilter(exOr(entry.id)), title: t('Replace exercise') })
+  }
+  const removeExercise = idx => confirmSheet({
+    title: t('Remove exercise?'),
+    message: t('Remaining sets will be removed. Completed sets stay in this workout.'),
+    confirmText: t('Remove exercise'), danger: true,
+    onConfirm: () => { stopRest(); update(s => { if (s.active) replaceActiveEntry(s.active, idx) }, true) }
+  })
+
   const modeAt = idx => modeOf({ ...(A.entries[idx].target || {}), id: A.entries[idx].id })
   const addSet = idx => mutEntry(idx, e => {
     const l = [...e.sets].reverse().find(s => !s.drop)
@@ -236,8 +271,8 @@ function ActiveWorkout() {
         const isLastExInUnit = idx === unit[unit.length - 1]
         const unitDone = unit.every(ui => (ui === idx ? e : A.entries[ui]).sets.every(x => x.done))
         if (continuesDrop(e.sets, i)) stopRest()
-        else if (isLastExInUnit && !unitDone) startRest(restSecondsFor(e.target, S.restSec))
-        else if (unitDone) stopRest()
+        // Keep the same recovery after the final set, including a completed superset.
+        else if (isLastExInUnit || unitDone) startRest(restSecondsFor(e.target, S.restSec))
         if (unitDone && isLastUnit) workoutDone = true      // last exercise's last set → done
         // Only loaded reps training has a "working weight" worth confirming — a bodyweight
         // plank has nothing to put in that slider, and neither does a set of push-ups
@@ -289,6 +324,11 @@ function ActiveWorkout() {
     </div>
     <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
 
+    {A.entries.length > 0 && <div className="sect-b" style={{ marginBottom: 12 }}>
+      <SelectRow title={t('Move to exercise')} value={cur}
+        onChange={idx => update(s => { s.active.cur = idx })}
+        options={A.entries.map((e, idx) => ({ value: idx, label: `${idx + 1}. ${exOr(e.id).n}`, subtitle: t('{0} sets', `${e.sets.filter(s => s.done).length}/${e.sets.length}`) }))} />
+    </div>}
     {A.entries.length ? <>
       <div className="muted small" style={{ marginBottom: 6 }}>{isSuperset ? t('Superset {0} / {1}', unitIdx + 1, units.length) : t('Exercise {0} / {1}', unitIdx + 1, units.length)}</div>
       {isSuperset ? (
@@ -297,11 +337,13 @@ function ActiveWorkout() {
           {unit.map((idx, k) => <div key={idx} className="ss-ex">
             {k > 0 && <div className="ss-amp">+</div>}
             <ExerciseBlock entryIdx={idx} compact
+              onReplace={() => replaceExercise(idx)} onRemove={() => removeExercise(idx)}
               onToggle={i => toggle(idx, i)} onField={(i, f, v) => setField(idx, i, f, v)} onAddSet={() => addSet(idx)} onAddDrop={() => addDrop(idx)} onRemoveSet={() => removeSet(idx)} onStartTimed={i => startTimed(idx, i)} />
           </div>)}
         </div>
       ) : (
-        <ExerciseBlock entryIdx={cur} onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onAddDrop={() => addDrop(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} />
+        <ExerciseBlock entryIdx={cur} onReplace={() => replaceExercise(cur)} onRemove={() => removeExercise(cur)}
+          onToggle={i => toggle(cur, i)} onField={(i, f, v) => setField(cur, i, f, v)} onAddSet={() => addSet(cur)} onAddDrop={() => addDrop(cur)} onRemoveSet={() => removeSet(cur)} onStartTimed={i => startTimed(cur, i)} />
       )}
     </> : <div className="empty"><div className="ico"><Icon name="shuffle" /></div>{t('Freestyle workout — add your first exercise.')}</div>}
 

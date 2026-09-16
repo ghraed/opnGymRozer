@@ -1,3 +1,4 @@
+import { physiqueFocusFor } from '../lib/physique-focus.js'
 import { t } from '../lib/i18n.js'
 import { EXIDX } from '../lib/exercises.js'
 import { programById } from '../lib/starter.js'
@@ -15,6 +16,7 @@ const descriptions = {
 }
 
 export default function ProgramRecommendation({ profile, plan, unit = 'kg', onChoose }) {
+  const focus = plan.evidence.physiqueFocus || physiqueFocusFor(profile)
   const recommended = programById(plan.recommendedProgramId)
   const automatic = !profile.programId
   const source = id => TRAINING_SOURCES.find(item => item.id === id)
@@ -37,6 +39,8 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
 
     <div className="setup-plan-overview" aria-live="polite" aria-atomic="true">
       <h3>{t(plan.name)}</h3>
+      <p className="accent"><strong>{t(focus.label)}</strong></p>
+      <p>{t(focus.description)}</p>
       <p>{t('{0} lifting days · {1} aerobic days per week', plan.evidence.resistanceDays, plan.evidence.aerobicDays)}</p>
     </div>
     <details className="setup-evidence" open>
@@ -47,6 +51,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
       <p>{t('This comparison is a planning estimate, not a tested formula for your optimal split. Research finds similar results for split and full-body routines when volume is matched.')} {link('split2024', 'Read the review')}</p>
       <p>{t('Profile considered: {0} {1}, {2} cm; sex: {3}.', profile.currentWeight, unit, profile.height,
         t(SEX_OPTIONS.find(option => option.value === profile.sex)?.label || 'Not provided'))} {t('Weight and height help your trainer check equipment fit and track progress. They do not measure lifting ability, so starting loads are chosen by comfortable technique and effort.')}</p>
+      <p>{t('Your selected sex sets the physique focus for generated plans. Muscle emphasis is a program goal; results depend on training, recovery, nutrition, and individual anatomy.')}</p>
       <p>{t('The same training principles apply across sexes. We do not infer sex from your body diagram or assign lighter weights because of sex.')} {link('sex2025', 'Sex and training research')}</p>
     </details>
 

@@ -3,4 +3,6 @@ api/node_modules/
 frontend/node_modules/
 frontend/dist/
 data/state-*.json
+data/mysql-recovery-*/
+docker-compose.override.yml
 npm-debug.log*

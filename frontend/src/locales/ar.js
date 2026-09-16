@@ -636,4 +636,11 @@ export default {
   '+{0} more': '+{0} تمارين إضافية',
   'Keep your goal in sight: {0}.': 'لا تغفل عن هدفك: {0}.',
   'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.': 'استخدم وزناً يجعل التكرارات الأخيرة صعبة؛ لا يلزم الوصول إلى الفشل العضلي الكامل.',
+  'Balanced muscle development': 'تطوير عضلي متوازن',
+  'Balanced training across all major muscle groups.': 'تدريب متوازن لجميع المجموعات العضلية الرئيسية.',
+  'Feminine physique · glutes and lower body': 'قوام أنثوي · عضلات الأرداف والجزء السفلي',
+  'Prioritizes glutes and legs while maintaining upper-body and core training.': 'يركّز على عضلات الأرداف والساقين مع الحفاظ على تدريب الجزء العلوي والجذع.',
+  'Muscular V-shape · back and shoulders': 'قوام عضلي بشكل V · الظهر والكتفان',
+  'Prioritizes back width and shoulder development while maintaining chest, legs, and core training.': 'يركّز على تطوير عرض الظهر والكتفين مع الحفاظ على تدريب الصدر والساقين والجذع.',
+  'Your selected sex sets the physique focus for generated plans. Muscle emphasis is a program goal; results depend on training, recovery, nutrition, and individual anatomy.': 'يحدّد الجنس المختار تركيز الخطط المُنشأة على القوام. التركيز العضلي هدف للبرنامج؛ وتعتمد النتائج على التدريب والتعافي والتغذية وبنية الجسم الفردية.',
 }

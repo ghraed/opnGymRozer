@@ -1,3 +1,5 @@
+import { physiqueFocusFor } from './physique-focus.js'
+
 // Evidence links and the distinction between research findings and product
 // assumptions are recorded in docs/TRAINING_EVIDENCE.md. Fractional sets are a
 // workload estimate, not a measurement of an individual's muscle stimulus.
@@ -22,9 +24,18 @@ export function trainingConstraints(profile = {}) {
   target ||= 4
   if (returning) target = Math.min(target, growth ? 6 : 4)
   const sessionMinutes = [30, 45, 60, 75, 90].includes(Number(profile.sessionMinutes)) ? Number(profile.sessionMinutes) : 60
+  const physiqueFocus = physiqueFocusFor(profile)
+  const targets = Object.fromEntries(Object.keys(MUSCLES).map(m => [m, m === 'core' ? Math.min(6, target) : target]))
+  // One additional three-set block for priority muscles in trained, recovered clients.
+  // Novices and returners change emphasis without increasing the starting budget.
+  const priorities = Object.fromEntries(Object.keys(MUSCLES).map(m => [m, physiqueFocus.muscles.includes(m) ? 2 : 1]))
+  if (!returning && experience !== 'beginner') {
+    for (const m of physiqueFocus.muscles) targets[m] += WORKING_SETS
+  }
   return {
+    physiqueFocus, priorities,
     sessionMinutes, recovery: returning ? 'limited' : 'normal',
-    target, targets: Object.fromEntries(Object.keys(MUSCLES).map(m => [m, m === 'core' ? Math.min(6, target) : target])),
+    target, targets,
     minExerciseSets: WORKING_SETS, maxExerciseSets: WORKING_SETS,
     maxMuscleSessionSets: 10,
   }
@@ -88,7 +99,7 @@ export function allocateWeeklySets(routines, week, profile = {}) {
       let gain = 0
       for (const [muscle, credit] of Object.entries(entry.muscles)) {
         const deficit = Math.max(0, limits.targets[muscle] - volume[muscle].total)
-        gain += Math.min(deficit, WORKING_SETS * credit * occurrences) / limits.targets[muscle]
+        gain += Math.min(deficit, WORKING_SETS * credit * occurrences) / limits.targets[muscle] * limits.priorities[muscle]
       }
       if (!coveredMovements.has(entry.movement)) gain += 0.5
       if (!routine.ex.some(e => e.mode !== 'cardio' && e.sets > 0)) gain += 0.5
@@ -119,6 +130,6 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   return { ...limits, weeklyVolume,
     volumeShortfalls: weeklyVolume.filter(m => m.shortfall > 0),
     missingMuscles: weeklyVolume.filter(m => m.total === 0).map(m => m.label),
-    workloadScore: weeklyVolume.reduce((sum, m) => sum + m.shortfall / m.target, 0),
+    workloadScore: weeklyVolume.reduce((sum, m) => sum + m.shortfall / m.target * limits.priorities[m.muscle], 0),
   }
 }

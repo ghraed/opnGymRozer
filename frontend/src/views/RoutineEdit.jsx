@@ -2,6 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore.js'
 import { exOr } from '../lib/exercises.js'
+import { replacementConfig, replacementFilter } from '../lib/exercise-actions.js'
 import { uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { supersetUnits, cleanupSg, exLine, modeOf, dropCount } from '../lib/history.js'
@@ -25,6 +26,22 @@ export default function RoutineEdit() {
 
   const edit = fn => update(s => { fn(s.routines.find(x => x.id === id).ex) })
   const move = (i, dir) => edit(ex => { const j = i + dir; if (j < 0 || j >= ex.length) return;[ex[i], ex[j]] = [ex[j], ex[i]]; cleanupSg(ex) })
+  const replace = i => {
+    const original = r.ex[i]
+    const picker = exercisePicker(ex => {
+      if (ex.id === original.id) return
+      picker.close()
+      exConfigSheet(ex, replacementConfig(original, ex.id), cfg => edit(entries => {
+        entries[i] = { ...cfg, id: ex.id, sg: entries[i].sg }
+      }), null, r)
+    }, { filter: replacementFilter(exOr(original.id)), title: t('Replace exercise') })
+  }
+  const remove = i => confirmSheet({
+    title: t('Remove exercise?'), message: t('Remove “{0}” from this plan?', exOr(r.ex[i].id).n),
+    confirmText: t('Remove exercise'), danger: true,
+    onConfirm: () => edit(entries => { entries.splice(i, 1); cleanupSg(entries) })
+  })
+
   const toggleLink = i => edit(ex => {
     if (i < 1) return
     const cur = ex[i], prev = ex[i - 1]
@@ -64,12 +81,16 @@ export default function RoutineEdit() {
       {t('Applies to every exercise in this routine that does not set its own rule.')}
     </div>
 
+    {r.ex.length > 0 && <div className="sect-b" style={{ marginBottom: 12 }}>
+      <SelectRow title={t('Move to exercise')} value="" onChange={i => document.getElementById(`plan-exercise-${i}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+        options={r.ex.map((e, i) => ({ value: i, label: `${i + 1}. ${exOr(e.id).n}` }))} />
+    </div>}
     {r.ex.length ? <div className="list">{r.ex.map((e, i) => {
       // An unresolvable id is shown rather than skipped — hiding it left an entry you
       // could neither see nor delete, but that still turned up in the workout.
       const ex = exOr(e.id)
       const linkedPrev = i > 0 && e.sg && r.ex[i - 1].sg === e.sg
-      return <div key={i}>
+      return <div key={i} id={`plan-exercise-${i}`}>
         {unitFirst.has(i) && <div className="ss-label"><Icon name="link" />{t('Superset')}</div>}
         <div className={'item' + (inSS.has(i) ? ' in-ss' : '')} onClick={() => {
           exConfigSheet(ex, e, cfg => edit(x => { x[i] = { id: x[i].id, sg: x[i].sg, ...cfg } }), () => edit(x => { x.splice(i, 1); cleanupSg(x) }), r)
@@ -89,6 +110,13 @@ export default function RoutineEdit() {
               <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
             </div>
           </div>
+        </div>
+        <div className="row" style={{ padding: '0 12px 12px', gap: 8, flexWrap: 'wrap' }}>
+          <Button size="sm" icon="shuffle" onClick={() => replace(i)}>{t('Replace exercise')}</Button>
+          <Button size="sm" icon="trash" onClick={() => remove(i)}>{t('Remove exercise')}</Button>
+          <SelectRow title={t('Move to position')} value={i} onChange={j => edit(entries => {
+            const [entry] = entries.splice(i, 1); entries.splice(j, 0, entry); cleanupSg(entries)
+          })} options={r.ex.map((entry, j) => ({ value: j, label: `${j + 1}. ${exOr(entry.id).n}` }))} />
         </div>
       </div>
     })}</div> : <div className="empty"><div className="ico"><Icon name="dumbbell" /></div>{t('No exercises yet — add your first one.')}</div>}

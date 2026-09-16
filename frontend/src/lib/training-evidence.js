@@ -1,7 +1,11 @@
-// Sources reviewed 2026-09-14. These support programming principles, not clinical
+// Sources reviewed 2026-09-17. These support programming principles, not clinical
 // approval of this app, a named split, or a particular generated exercise list.
-export const TRAINING_POLICY_VERSION = '2026-09-14-v3'
+export const TRAINING_POLICY_VERSION = '2026-09-17-v4'
 export const TRAINING_SOURCES = [
+  { id: 'glutes2023', title: 'Plotkin et al.: hip thrust and squat training (2023)', url: 'https://pubmed.ncbi.nlm.nih.gov/37877099/',
+    finding: 'Both exercises increased gluteal size similarly in untrained participants; squats produced more thigh growth. Floor bridges are a practical variation, not the exact intervention tested.' },
+  { id: 'delts2025', title: 'Lateral raise training and shoulder growth (2025)', url: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC12277279/',
+    finding: 'Dumbbell and cable lateral raises increased lateral deltoid size similarly in trained participants. This supports direct shoulder work, not a guaranteed V-shaped physique.' },
   { id: 'acsm2026', title: 'ACSM position stand (2026)', url: 'https://pubmed.ncbi.nlm.nih.gov/41843416/',
     finding: 'Resistance training improves strength and muscle size. Tailor load and weekly volume to the goal; training to failure is optional.' },
   { id: 'volume2026', title: 'Pelland et al.: weekly volume and frequency meta-regression (2026)', url: 'https://pubmed.ncbi.nlm.nih.gov/41343037/',
