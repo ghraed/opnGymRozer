@@ -67,6 +67,7 @@ const P = {
   stretch: <><circle cx="14.4" cy="5.4" r="1.9" /><path d="M14.4 8.2c-3 1.4-5 4-5.8 7.4" /><path d="M8.6 15.6 6.2 20M8.6 15.6l4.6 4.4" /><path d="M12.6 9.6 18 12" /></>,
 
   /* ---- actions ---- */
+  ellipsisVertical: <><circle cx="12" cy="5" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" /><circle cx="12" cy="19" r="1.6" fill="currentColor" stroke="none" /></>,
   plus: <path d="M12 5.2v13.6M5.2 12h13.6" />,
   minus: <path d="M5.2 12h13.6" />,
   check: <path d="m4.8 12.6 4.8 4.8L19.2 6.8" />,

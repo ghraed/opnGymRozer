@@ -9,6 +9,7 @@ import { supersetUnits, cleanupSg, exLine, modeOf, dropCount } from '../lib/hist
 import { Thumb } from '../components/Media.jsx'
 import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, muscleExercisesSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
+import ExerciseActionsMenu from '../components/ExerciseActionsMenu.jsx'
 import { glyphOf } from '../lib/glyphs.js'
 import { Button, SelectRow } from '../components/ui.jsx'
 import { POLICIES_FOR, POLICY_NAME, POLICY_DESC } from '../lib/progression.js'
@@ -98,13 +99,12 @@ export default function RoutineEdit() {
           <Thumb ex={ex} />
           <div className="grow"><div className="tt capitalize">{ex.n}</div><div className="ss">{exLine(e, S.unit)}</div></div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 'none', alignItems: 'center' }}>
-            <div className="row" style={{ gap: 2 }}>
-            {modeOf(e) === 'reps' && <button className={'iconbtn' + (dropCount(e.drops) ? ' on-ss' : '')}
-              aria-label={t('Drop set')} aria-pressed={dropCount(e.drops) > 0} title={t('Drop set')}
-              style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }}
-              onClick={ev => { ev.stopPropagation(); toggleDrop(i) }}><Icon name="arrowDown" /></button>}
-            {i > 0 && <button className={'iconbtn' + (linkedPrev ? ' on-ss' : '')} title={t('Superset with exercise above')} style={{ width: 32, height: 28, borderRadius: 8, fontSize: 15 }} onClick={ev => { ev.stopPropagation(); toggleLink(i) }}><Icon name="link" /></button>}
-            </div>
+            <ExerciseActionsMenu name={ex.n} actions={[
+              ...(modeOf(e) === 'reps' ? [{ label: t('Drop set'), icon: 'arrowDown', checked: dropCount(e.drops) > 0, onClick: () => toggleDrop(i) }] : []),
+              ...(i > 0 ? [{ label: t('Superset with exercise above'), icon: 'link', checked: !!linkedPrev, onClick: () => toggleLink(i) }] : []),
+              { label: t('Replace exercise'), icon: 'shuffle', onClick: () => replace(i) },
+              { label: t('Remove exercise'), icon: 'trash', danger: true, onClick: () => remove(i) },
+            ]} />
             <div style={{ display: 'flex', gap: 2 }}>
               <button className="iconbtn" aria-label="Move up" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, -1) }}><Icon name="chevronUp" /></button>
               <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
@@ -112,8 +112,6 @@ export default function RoutineEdit() {
           </div>
         </div>
         <div className="row" style={{ padding: '0 12px 12px', gap: 8, flexWrap: 'wrap' }}>
-          <Button size="sm" icon="shuffle" onClick={() => replace(i)}>{t('Replace exercise')}</Button>
-          <Button size="sm" icon="trash" onClick={() => remove(i)}>{t('Remove exercise')}</Button>
           <SelectRow title={t('Move to position')} value={i} onChange={j => edit(entries => {
             const [entry] = entries.splice(i, 1); entries.splice(j, 0, entry); cleanupSg(entries)
           })} options={r.ex.map((entry, j) => ({ value: j, label: `${j + 1}. ${exOr(entry.id).n}` }))} />
@@ -137,8 +135,8 @@ export default function RoutineEdit() {
       </div>
     })()}
 
-    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="link" style={{ fontSize: 13 }} />{t('Tap the link button on an exercise to superset it with the one above — you’ll do them back-to-back.')}</div>
-    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="arrowDown" />{t('Tap the down arrow to mark a drop set. Tap the exercise to set each weight.')}</div>
+    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="link" style={{ fontSize: 13 }} />{t('Open the three-dot menu to superset an exercise with the one above — you’ll do them back-to-back.')}</div>
+    <div className="small dim row" style={{ margin: '10px 2px', gap: 5 }}><Icon name="arrowDown" />{t('Open the three-dot menu to mark a drop set. Tap the exercise to set each weight.')}</div>
     {r.exerciseFilter && <div className="small dim" style={{ margin: '12px 2px 8px' }}>
       {t('Exercise suggestions are filtered for {0}. You can expand the picker to add anything else.', t(r.exerciseFilter.label))}
     </div>}

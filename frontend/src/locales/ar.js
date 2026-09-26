@@ -1,5 +1,9 @@
 // Arabic UI strings. Keys are the English source strings (see lib/i18n.js).
 export default {
+  'Exercise actions for {0}': 'خيارات التمرين {0}',
+  'Open the three-dot menu to superset an exercise with the one above — you’ll do them back-to-back.': 'افتح قائمة النقاط الثلاث لربط التمرين بالتمرين أعلاه في مجموعة مزدوجة — ستؤديهما تباعاً.',
+  'Open the three-dot menu to mark a drop set. Tap the exercise to set each weight.': 'افتح قائمة النقاط الثلاث لتحديد مجموعة تنازلية. اضغط التمرين لتحديد كل وزن.',
+
   'Complete the drop rows back-to-back without rest.': 'أكمل مجموعات الدروب سيت تباعاً دون راحة.',
   'Only these drop-set rows are used. Your regular sets return when you turn off the drop-set flag.': 'تُستخدم مجموعات الدروب سيت هذه فقط. تعود مجموعاتك الأصلية عند إلغاء تفعيل الدروب سيت.',
   'Tap the down arrow to mark a drop set. Tap the exercise to set each weight.': 'اضغط السهم للأسفل لتحديد مجموعة تنازلية. اضغط التمرين لتحديد كل وزن.',
