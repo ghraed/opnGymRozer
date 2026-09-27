@@ -47,6 +47,19 @@ describe('weekly workload accounting and personalization', () => {
     ] })).toBe(21.5) // 5 + 1 + 90 seconds of repetitions + 4 minutes resting + 10 cardio.
   })
 
+  it('estimates unilateral reps, setup, rest, and set count independently', () => {
+    const base = { sets: 3, reps: 10, rest: 60, executionMode: 'bilateral', setupCost: 'low' }
+    const estimate = entry => estimateSessionMinutes({ ex: [entry] })
+    expect(estimate({ ...base, executionMode: 'unilateral' })).toBeGreaterThan(estimate(base))
+    expect(estimate({ ...base, setupCost: 'high' })).toBeGreaterThan(estimate(base))
+    expect(estimate({ ...base, rest: 180 })).toBeGreaterThan(estimate(base))
+    expect(estimate({ ...base, sets: 4 })).toBeGreaterThan(estimate({ ...base, sets: 2 }))
+    expect(selectMovement({ id: '0410' }, { equipment: 'dumbbells', experience: 'intermediate', hasBench: true }, new Set()))
+      .toMatchObject({ executionMode: 'unilateral' })
+    expect(selectMovement({ id: '0043' }, { equipment: 'full_gym', experience: 'intermediate' }, new Set()))
+      .toMatchObject({ setupCost: 'high' })
+  })
+
   it('keeps compounds and accessories at three sets while accounting for weekly overlap', () => {
     const plan = buildOnboardingProgram({ ...profile, programId: 'upper_lower' })
     expect(plan.evidence).toMatchObject({ minExerciseSets: 3, maxExerciseSets: 3 })
@@ -106,8 +119,8 @@ describe('weekly workload accounting and personalization', () => {
     expect(pull.muscles).toEqual(muscleCreditFor(pull.id).muscles)
     expect(pull.muscles.biceps).toBe(0.5) // Replacing a curl with a row does not make it a direct biceps set.
     const noStation = buildOnboardingProgram({ ...profile, programId: 'ppl', equipment: 'bodyweight' })
-    expect(noStation.evidence.missingMuscles).toEqual(expect.arrayContaining(['Back', 'Biceps']))
-    expect(noStation.evidence.unavailableSessions).toContain('Pull Day')
+    expect(noStation.status).toBe('NO_FEASIBLE_PLAN')
+    expect(noStation.blockingReasons).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'NO_SUITABLE_EXERCISE', session: 'Pull Day' })]))
     const noBench = buildOnboardingProgram({ ...profile, equipment: 'dumbbells' })
     const ids = noBench.routines.flatMap(r => r.ex.map(e => e.id))
     expect(ids).toContain('og-db-floor-press')

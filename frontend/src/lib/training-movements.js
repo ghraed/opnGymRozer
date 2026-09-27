@@ -1,3 +1,5 @@
+import { EXDB } from './exercises-data.js'
+
 // Explicit movement families replace the old arbitrary catalogue search. Each
 // family has a defined training purpose. IDs are app exercise demonstrations;
 // source IDs support that purpose/prescription, not approval of each variant.
@@ -87,6 +89,19 @@ const VARIANT_LABELS = {
   '0417': 'Calf raise', '1373': 'Calf raise',
 }
 
+const EXERCISE_BY_ID = Object.fromEntries(EXDB.map(exercise => [exercise.id, exercise]))
+const UNILATERAL_IDS = new Set(['0410', '3470'])
+const HIGH_SETUP_IDS = new Set(['0043', '0032', '1409'])
+
+// Timing follows the selected variant, since substitution can change its setup
+// and whether every prescribed rep is performed on each side.
+export function timingForMovement(id) {
+  const equipment = EXERCISE_BY_ID[id]?.eq || EXTRA_EXERCISES.find(exercise => exercise.id === id)?.eq
+  const setupCost = HIGH_SETUP_IDS.has(id) ? 'high'
+    : ['cable', 'leverage machine', 'smith machine', 'barbell'].includes(equipment) ? 'medium' : 'low'
+  return { executionMode: UNILATERAL_IDS.has(id) ? 'unilateral' : 'bilateral', setupCost }
+}
+
 export function selectMovement(entry, profile, used) {
   const movement = movementFor(entry.id)
   if (!movement) return null // Never substitute from an unreviewed catalogue entry.
@@ -107,6 +122,7 @@ export function selectMovement(entry, profile, used) {
   const horizontalSubstitute = SOURCE_FAMILY[entry.id] === 'pull' && ['0293', '2300', '0499'].includes(id)
   return { ...entry, id, movement: VARIANT_LABELS[id] || movementFor(id)?.label || movement.label, sourceIds: movement.sourceIds,
     muscles: { ...CREDITS[id].muscles }, mainLift: CREDITS[id].compound, compound: CREDITS[id].compound,
+    ...timingForMovement(id),
     // A row is a practical dumbbell substitute, not a vertical-pull equivalent.
     adaptation: horizontalSubstitute ? 'Horizontal pulling substitute; add a pulldown or pull-up when equipment and ability allow.' : undefined }
 }

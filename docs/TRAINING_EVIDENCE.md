@@ -1,11 +1,12 @@
 # Training recommendation evidence
 
-Reviewed 17 September 2026; policy version `2026-09-17-v4`.
+Reviewed 27 September 2026; policy version `2026-09-27-v5`.
 
 Setup step 3, the fitness profile editor, and installing a starter program for a completed
 profile use the same planner. All four splits are evaluated against the profile before the
 system recommends one. An explicit choice remains selected even when another split is
-recommended. Exact programs are app programming decisions for generally healthy adults;
+recommended. If it cannot produce a valid plan, the planner returns structured blocking
+reasons and does not save or apply an empty workout. Exact programs are app programming decisions for generally healthy adults;
 the cited organizations and studies have not medically approved the app or validated its
 individual recommendations.
 
@@ -72,15 +73,28 @@ exercises; it never reduces their set count. A muscle gets at most 10 counted se
 session. This remains a planning cap, not a proven safety threshold. The three-set blocks
 can take weekly totals above a starting budget; that budget is not an exact set quota.
 
-The estimate uses 5 minutes warm-up, 1 minute setup per movement, 3 seconds per repetition,
-and prescribed rest **between** sets. These time assumptions are not study findings.
+The estimate uses a 5-minute warm-up, 3 seconds per repetition, setup costs of 0.5, 1 or
+2 minutes, and prescribed rest **between** sets. The selected exercise carries timing
+metadata. Unilateral movements count reps on both sides plus 20 seconds per set to switch
+sides; rest is counted once between sets. These time assumptions are planning estimates,
+not study findings or promises of exact workout length.
 The preview reports direct, weighted indirect and total sets, session counts, starting
 budgets, and shortfalls. It explains each exercise's own weekly sets alongside its target
-muscles' totals. Missing muscle work and sessions without suitable exercises are disclosed.
-The app does not silently exceed the time limit or claim every split meets every budget.
+muscles' totals. Missing muscle work is disclosed as a soft workload gap. A session without a suitable
+exercise blocks application of that candidate. The app does not silently exceed the time
+limit or claim every split meets every budget.
 
-Split ranking sums normalized muscle shortfalls, adds a penalty for empty sessions, and
-uses availability/experience preferences to resolve similarly feasible options. Novice or
+Hard validation runs before split ranking. A candidate must cover the selected days with
+nonempty workouts, keep each estimated session within the selected limit, use available
+equipment, and respect three-set prescriptions and per-muscle session caps. Invalid splits
+are excluded from automatic recommendations. An explicitly selected invalid split returns
+`NO_FEASIBLE_PLAN` with blocking reasons; the app does not switch it automatically. Weekly
+set targets are soft: a shortfall returns `VALID_PLAN_WITH_SOFT_TRADEOFFS`, not failure.
+When no candidate works, the planner returns `NO_FEASIBLE_PLAN` rather than an empty plan.
+The search is limited to the app's reviewed movement candidates and schedule templates.
+
+Split ranking sums normalized muscle shortfalls among valid candidates and uses
+availability/experience preferences to resolve similarly feasible options. Novice or
 limited-recovery schedules with more than three lifting days receive an additional penalty.
 These score weights are transparent scheduling heuristics, not a clinically validated ranking.
 Two-day variants merge named split sessions. Full-body lifting has recovery days between
@@ -148,7 +162,8 @@ version and generation assessment, while entries retain sources and volume expla
 This assessment describes the plan **when generated**; later manual edits do not automatically
 recompute it. Existing assigned schedules are preserved unless replacement is explicitly
 chosen. Past routines and workout history remain saved. Tests cover profile combinations,
-independent direct/indirect arithmetic, actual substitutions, time and set caps, recovery,
+independent direct/indirect arithmetic, actual substitutions, unilateral and setup time,
+all-candidate infeasibility, time and set caps, recovery,
 effort/rest, source coverage and persistence.
 
 ## Physique emphasis (v4)

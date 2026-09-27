@@ -71,6 +71,7 @@ export default function ProfileSetup() {
   const save = async () => {
     const message = profileStepError(profile, 0) || profileStepError(profile, 1) || profileStepError(profile, 2)
     if (message) { setError(t(message)); return }
+    if (!preservePlan && recommendation.status === 'NO_FEASIBLE_PLAN') { setError(t('Choose a feasible program or adjust your training constraints.')); return }
     setSaving(true)
     setError('')
     try {
@@ -140,7 +141,7 @@ export default function ProfileSetup() {
         </>}
       </fieldset>
       {error && <p className="setup-error" role="alert">{error}</p>}
-      <div className="setup-actions">{step > 0 && <Button type="button" disabled={saving} onClick={() => navigate('/setup/' + step)}>{t('Back')}</Button>}<Button type="submit" variant="primary" disabled={saving || photoBusy}>{saving ? t('Saving…') : step < 2 ? t('Next') : t('Save profile and continue')}</Button></div>
+      <div className="setup-actions">{step > 0 && <Button type="button" disabled={saving} onClick={() => navigate('/setup/' + step)}>{t('Back')}</Button>}<Button type="submit" variant="primary" disabled={saving || photoBusy || (step === 2 && !preservePlan && recommendation.status === 'NO_FEASIBLE_PLAN')}>{saving ? t('Saving…') : step < 2 ? t('Next') : t('Save profile and continue')}</Button></div>
     </form>
   </main>
 }

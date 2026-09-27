@@ -16,6 +16,23 @@ const descriptions = {
 }
 
 export default function ProgramRecommendation({ profile, plan, unit = 'kg', onChoose }) {
+  if (plan.status === 'NO_FEASIBLE_PLAN') return <section className="card recommendation-card setup-program" aria-labelledby="program-title">
+    <h2 id="program-title">{t('Choose your program')}</h2>
+    <div className="recommendation-splits" role="group" aria-label={t('Training split')}>
+      {selectablePrograms().map(id => <button type="button" key={id} aria-pressed={plan.programId === id}
+        className={'recommendation-split' + (plan.programId === id ? ' on' : '')} onClick={() => onChoose(id)}>
+        <span>{t(programById(id).name)}</span>
+        {id === plan.recommendedProgramId && <small>{t('Recommended')}</small>}
+        <span className="setup-split-description">{t(descriptions[id])}</span>
+      </button>)}
+    </div>
+    {profile.programId && <Button type="button" size="sm" className="setup-auto-program" onClick={() => onChoose(null)}>{t('Use automatic recommendation')}</Button>}
+    <div className="recommendation-warning" role="alert">
+      <strong>{t('No feasible plan for these choices')}</strong>
+      <ul>{plan.blockingReasons.map((reason, index) => <li key={index}>{reason.split ? `${t(programById(reason.split).name)}: ` : ''}{t(reason.message)}</li>)}</ul>
+    </div>
+    {plan.recommendedProgramId && <p className="recommendation-guidance">{t('A feasible alternative is {0}. Select it or use automatic recommendation.', t(programById(plan.recommendedProgramId).name))}</p>}
+  </section>
   const focus = plan.evidence.physiqueFocus || physiqueFocusFor(profile)
   const recommended = programById(plan.recommendedProgramId)
   const automatic = !profile.programId
@@ -39,6 +56,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
 
     <div className="setup-plan-overview" aria-live="polite" aria-atomic="true">
       <h3>{t(plan.name)}</h3>
+      <p className="small muted" role="status">{t(plan.status === 'VALID_PLAN_WITH_SOFT_TRADEOFFS' ? 'Feasible plan with some starting workload targets below budget.' : 'Feasible plan within the selected hard limits.')}</p>
       <p className="accent"><strong>{t(focus.label)}</strong></p>
       <p>{t(focus.description)}</p>
       <p>{t('{0} lifting days · {1} aerobic days per week', plan.evidence.resistanceDays, plan.evidence.aerobicDays)}</p>

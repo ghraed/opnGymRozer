@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EXIDX } from './exercises.js'
-import { applyOnboarding, buildOnboardingProgram, selectablePrograms, programForDays, WALKING_EXERCISE } from './onboarding.js'
+import { applyOnboarding, buildOnboardingProgram, selectFeasiblePlan, selectablePrograms, programForDays, WALKING_EXERCISE } from './onboarding.js'
 import { MOVEMENTS, selectMovement, EXTRA_EXERCISES } from './training-movements.js'
 import { TRAINING_POLICY_VERSION, TRAINING_SOURCES } from './training-evidence.js'
 import { todayISO } from './format.js'
@@ -40,7 +40,57 @@ describe('research-informed onboarding recommendations', () => {
     const profile = { days: 6, programId: 'bro_split', goal: 'muscle', experience: 'beginner' }
     expect(buildOnboardingProgram(profile).programId).toBe('bro_split')
     expect(buildOnboardingProgram({ ...profile, programId: null }).programId).toBe('full_body')
-    expect(buildOnboardingProgram({ ...profile, programId: 'unknown' }).programId).toBe('full_body')
+    expect(buildOnboardingProgram({ ...profile, selectedSplitSource: 'recommended' }).programId).toBe('full_body')
+    expect(buildOnboardingProgram({ ...profile, programId: 'unknown' })).toMatchObject({ status: 'NO_FEASIBLE_PLAN', blockingReasons: [expect.objectContaining({ code: 'INVALID_SPLIT' })] })
+  })
+
+  it('rejects an explicit infeasible split and keeps an automatic feasible alternative', () => {
+    const profile = { days: 4, goal: 'muscle', experience: 'intermediate', equipment: 'bodyweight', sessionMinutes: 30 }
+    const selected = buildOnboardingProgram({ ...profile, programId: 'ppl' })
+    expect(selected).toMatchObject({ status: 'NO_FEASIBLE_PLAN', programId: 'ppl', selectedSplitSource: 'user' })
+    expect(selected.blockingReasons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'NO_SUITABLE_EXERCISE', session: 'Pull Day' }),
+    ]))
+    expect(selected.routines).toBeUndefined()
+    const automatic = buildOnboardingProgram(profile)
+    expect(automatic.status).not.toBe('NO_FEASIBLE_PLAN')
+    expect(automatic.programId).toBe(automatic.recommendedProgramId)
+    expect(automatic.alternatives.some(candidate => candidate.programId === 'ppl')).toBe(false)
+  })
+
+  it('keeps a shortfall as a valid soft tradeoff', () => {
+    const plan = buildOnboardingProgram({ days: 2, sessionMinutes: 30, programId: 'full_body', goal: 'muscle', equipment: 'dumbbells', experience: 'advanced' })
+    expect(plan.status).toBe('VALID_PLAN_WITH_SOFT_TRADEOFFS')
+    expect(plan.evidence.volumeShortfalls.length).toBeGreaterThan(0)
+    expect(plan.blockingReasons).toEqual([])
+  })
+
+  it('does not replace invalid explicit days or duration with defaults', () => {
+    expect(buildOnboardingProgram({ days: 1 })).toMatchObject({ status: 'NO_FEASIBLE_PLAN', blockingReasons: [expect.objectContaining({ code: 'TRAINING_DAYS' })] })
+    expect(buildOnboardingProgram({ days: 3, sessionMinutes: 10 })).toMatchObject({ status: 'NO_FEASIBLE_PLAN', blockingReasons: [expect.objectContaining({ code: 'SESSION_DURATION_LIMIT' })] })
+  })
+
+  it('returns structured reasons when every candidate violates a hard requirement', () => {
+    const candidates = selectablePrograms().map(programId => ({
+      programId, days: 2, week: { 1: programId, 4: programId },
+      routines: [{ id: programId, name: 'Pull Day', program: programId, ex: [], estimatedMinutes: 5 }],
+      minimumSessionMinutes: { [programId]: Infinity },
+      evidence: { sessionMinutes: 30, maxMuscleSessionSets: 10, workloadScore: 0, volumeShortfalls: [], resistanceDays: 2 },
+    }))
+    const result = selectFeasiblePlan(candidates, { days: 2, programId: 'ppl', equipment: 'bodyweight' })
+    expect(result.status).toBe('NO_FEASIBLE_PLAN')
+    expect(result.recommendedProgramId).toBeNull()
+    expect(result.blockingReasons).toEqual([
+      expect.objectContaining({ code: 'NO_SUITABLE_EXERCISE', session: 'Pull Day' }),
+    ])
+    const automatic = selectFeasiblePlan(candidates, { days: 2, equipment: 'bodyweight' })
+    expect(automatic.status).toBe('NO_FEASIBLE_PLAN')
+    expect(automatic.blockingReasons).toHaveLength(4)
+    expect(automatic.blockingReasons.every(reason => reason.split)).toBe(true)
+    const state = { bodyweight: [], routines: [], week: {}, customEx: [] }
+    const blocked = applyOnboarding(state, { days: 4, programId: 'ppl', equipment: 'bodyweight', sessionMinutes: 30 })
+    expect(blocked.status).toBe('NO_FEASIBLE_PLAN')
+    expect(state).toEqual({ bodyweight: [], routines: [], week: {}, customEx: [] })
   })
 
   it('uses reviewable exercises, source references and bounded prescriptions across all choices', () => {
@@ -52,6 +102,11 @@ describe('research-informed onboarding recommendations', () => {
           for (let days = 2; days <= 6; days++) {
             for (const equipment of ['full_gym', 'dumbbells', 'bodyweight']) {
               const plan = buildOnboardingProgram({ goal, experience, programId, days, equipment })
+              if (plan.status === 'NO_FEASIBLE_PLAN') {
+                expect(plan.programId).toBe(programId)
+                expect(plan.blockingReasons.length).toBeGreaterThan(0)
+                continue
+              }
               expect(Object.keys(plan.week)).toHaveLength(days)
               expect(new Set(Object.values(plan.week))).toEqual(new Set(plan.routines.map(r => r.id)))
               expect(plan.evidence.policyVersion).toBe(TRAINING_POLICY_VERSION)
@@ -163,7 +218,7 @@ describe('research-informed onboarding recommendations', () => {
   it('saves the chosen program, custom aerobic exercise, profile and provenance without erasing history', () => {
     const state = { body: 'male', bodyweight: [], targetW: null, routines: [{ id: 'old' }], customEx: [], week: {}, dayPlan: { '2099-01-01': 'rest' }, workouts: [{ id: 'completed' }] }
     applyOnboarding(state, { goal: 'lose_weight', currentWeight: 82.4, height: 175.5, targetWeight: 75, days: 3, body: 'female', sex: 'unspecified', programId: 'bro_split', equipment: 'dumbbells' }, 123)
-    expect(state.onboarding).toMatchObject({ completedAt: 123, currentWeight: 82.4, height: 175.5, targetWeight: 75, programId: 'bro_split', trainingPolicyVersion: TRAINING_POLICY_VERSION, sex: 'unspecified' })
+    expect(state.onboarding).toMatchObject({ completedAt: 123, currentWeight: 82.4, height: 175.5, targetWeight: 75, programId: 'bro_split', selectedSplitSource: 'user', trainingPolicyVersion: TRAINING_POLICY_VERSION, sex: 'unspecified' })
     expect(state.bodyweight).toEqual([{ d: todayISO(), w: 82.4, t: 123 }])
     expect(state.targetW).toBe(75)
     expect(state.body).toBe('female')
@@ -174,5 +229,8 @@ describe('research-informed onboarding recommendations', () => {
     expect(state.dayPlan).toEqual({})
     expect(state.customEx).toEqual([WALKING_EXERCISE, ...EXTRA_EXERCISES.filter(ex => ex.id === 'og-db-floor-press')])
     expect(state.onboarding.trainingAssessment.weeklyVolume).toHaveLength(10)
+    const automaticState = { bodyweight: [], routines: [], week: {}, customEx: [] }
+    applyOnboarding(automaticState, { days: 3, goal: 'muscle', equipment: 'full_gym' })
+    expect(automaticState.onboarding.selectedSplitSource).toBe('recommended')
   })
 })

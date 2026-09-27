@@ -65,6 +65,7 @@ export default function Onboarding({ close, allowSkip = true }) {
     setStep(value => Math.min(2, value + 1))
   }
   const apply = () => {
+    if (plan.status === 'NO_FEASIBLE_PLAN') { toast(t('Choose a feasible program or adjust your training constraints.')); return }
     update(s => { applyOnboarding(s, { ...profileForPlan, unit: st.unit }) })
     close()
     toast(t('Your personalized plan is ready'))
@@ -117,14 +118,14 @@ export default function Onboarding({ close, allowSkip = true }) {
       }} />
       {hasExistingSchedule && confirmReplace && <div className="card" style={{ borderColor: 'var(--orange)', marginBottom: 12 }}>
         <div className="small">{t('Your past workouts and existing routines will stay saved. The new plan will replace only your weekly schedule.')}</div>
-        <div style={{ height: 10 }} /><Button variant="danger" onClick={apply}>{t('Confirm and apply plan')}</Button>
+        <div style={{ height: 10 }} /><Button variant="danger" onClick={apply} disabled={plan.status === 'NO_FEASIBLE_PLAN'}>{t('Confirm and apply plan')}</Button>
       </div>}
     </>}
     <div style={{ height: 16 }} />
     <div className="row onboarding-actions" style={{ gap: 8 }}>
       {step > 0 && <Button className="onboarding-back" onClick={() => setStep(value => value - 1)}>{t('Back')}</Button>}
       {step < 2 ? <Button variant="primary" onClick={next} style={{ flex: 1 }}>{t('Next')}</Button>
-        : !confirmReplace && <Button variant="primary" onClick={hasExistingSchedule ? () => setConfirmReplace(true) : apply} style={{ flex: 1 }}>{t('Apply my plan')}</Button>}
+        : !confirmReplace && <Button variant="primary" onClick={hasExistingSchedule ? () => setConfirmReplace(true) : apply} disabled={plan.status === 'NO_FEASIBLE_PLAN'} style={{ flex: 1 }}>{t('Apply my plan')}</Button>}
     </div>
     {allowSkip && step < 2 && <><div style={{ height: 8 }} /><Button variant="ghost" className="onboarding-skip" onClick={skip}>{t('Skip for now')}</Button></>}
   </>

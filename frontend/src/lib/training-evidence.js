@@ -1,6 +1,6 @@
 // Sources reviewed 2026-09-17. These support programming principles, not clinical
 // approval of this app, a named split, or a particular generated exercise list.
-export const TRAINING_POLICY_VERSION = '2026-09-17-v4'
+export const TRAINING_POLICY_VERSION = '2026-09-27-v5'
 export const TRAINING_SOURCES = [
   { id: 'glutes2023', title: 'Plotkin et al.: hip thrust and squat training (2023)', url: 'https://pubmed.ncbi.nlm.nih.gov/37877099/',
     finding: 'Both exercises increased gluteal size similarly in untrained participants; squats produced more thigh growth. Floor bridges are a practical variation, not the exact intervention tested.' },

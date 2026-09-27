@@ -60,16 +60,22 @@ export function countWeeklyVolume(routines, week) {
   return result
 }
 
-// Includes a five-minute warm-up, one minute to set up each movement, estimated
-// repetition time, and rests BETWEEN sets. Actual session duration will vary.
+// Planning estimate: warm-up, variant-specific setup, reps on each side when
+// appropriate, side changes, and rests BETWEEN sets. Rest is not doubled for
+// unilateral work because the sides are completed within each prescribed set.
 export function estimateSessionMinutes(routine) {
   let minutes = 5
   for (const entry of routine.ex) {
     if (!(entry.sets > 0)) continue
     if (entry.mode === 'cardio') minutes += entry.min
-    else minutes += 1 + entry.sets * entry.reps * 3 / 60 + Math.max(0, entry.sets - 1) * entry.rest / 60
+    else {
+      const setupMinutes = { low: 0.5, medium: 1, high: 2 }[entry.setupCost] ?? 1
+      const sides = entry.executionMode === 'unilateral' ? 2 : 1
+      const workSeconds = entry.sets * (entry.reps * sides * 3 + (sides - 1) * 20)
+      minutes += setupMinutes + workSeconds / 60 + Math.max(0, entry.sets - 1) * entry.rest / 60
+    }
   }
-  return Math.round(minutes * 10) / 10
+  return Math.ceil(minutes * 10 - 1e-9) / 10
 }
 
 export function allocateWeeklySets(routines, week, profile = {}) {

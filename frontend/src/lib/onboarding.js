@@ -2,7 +2,7 @@ import { buildProgram, programById, PROGRAMS } from './starter.js'
 import { todayISO, uid } from './format.js'
 import { movementFor, selectMovement, EXTRA_EXERCISES } from './training-movements.js'
 import { TRAINING_POLICY_VERSION, TRAINING_SOURCES } from './training-evidence.js'
-import { allocateWeeklySets, trainingConstraints } from './training-volume.js'
+import { allocateWeeklySets, countWeeklyVolume, estimateSessionMinutes, trainingConstraints } from './training-volume.js'
 import { physiqueFocusFor } from './physique-focus.js'
 import { EXIDX } from './exercises.js'
 
@@ -198,13 +198,19 @@ function buildCandidate(profile, programId) {
     routines.push(cardio)
     week[day] = cardio.id
   }
+  const minimumSessionMinutes = Object.fromEntries(routines.filter(routine => routine.program !== 'cardio').map(routine => [
+    routine.id, routine.ex.filter(entry => entry.mode !== 'cardio').reduce((minimum, entry) =>
+      Math.min(minimum, estimateSessionMinutes({ ex: [
+        ...routine.ex.filter(candidate => candidate.mode === 'cardio'), { ...entry, sets: 3 },
+      ] })), Infinity),
+  ]))
   const workload = allocateWeeklySets(routines, week, profile)
   const routineById = Object.fromEntries(routines.map(routine => [routine.id, routine]))
   const cardioMinutes = Object.values(week).flatMap(id => routineById[id]?.ex || [])
     .filter(entry => entry.mode === 'cardio').reduce((sum, entry) => sum + (Number(entry.min) || 0), 0)
   const main = routines.flatMap(routine => routine.ex).find(entry => entry.mode !== 'cardio')
   return {
-    ...recommendation, routines, week,
+    ...recommendation, routines, week, minimumSessionMinutes,
     customEx: [WALKING_EXERCISE, ...EXTRA_EXERCISES].filter(ex => routines.some(r => r.ex.some(e => e.id === ex.id))),
     evidence: {
       ...workload,
@@ -233,33 +239,98 @@ function buildCandidate(profile, programId) {
   }
 }
 
-/** Compare feasible weekly workloads for all four splits before selecting one.
- * This is a transparent scheduling heuristic, not a clinically validated score. */
-export function buildOnboardingProgram(profile = {}) {
-  const candidates = selectablePrograms().map(id => buildCandidate(profile, id))
+export function validatePlanCandidate(plan, profile = {}) {
+  const reasons = []
+  const limit = plan.evidence.sessionMinutes
+  const scheduled = Object.values(plan.week)
+  if (scheduled.length !== plan.days || scheduled.some(id => !plan.routines.some(routine => routine.id === id))) {
+    reasons.push({ code: 'TRAINING_DAYS', message: 'The plan cannot cover the selected training days.' })
+  }
+  for (const routine of plan.routines) {
+    if (!scheduled.includes(routine.id)) continue
+    if (!routine.ex.length || (routine.program !== 'cardio' && !routine.ex.some(entry => entry.mode !== 'cardio'))) {
+      const minimum = plan.minimumSessionMinutes[routine.id]
+      const code = minimum > limit && Number.isFinite(minimum) ? 'SESSION_DURATION_LIMIT' : 'NO_SUITABLE_EXERCISE'
+      reasons.push({ code, session: routine.name, message: code === 'SESSION_DURATION_LIMIT'
+        ? `${routine.name} needs at least about ${Math.ceil(minimum)} minutes for one reviewed exercise within the selected split; the limit is ${limit} minutes.`
+        : `No suitable exercise can fill ${routine.name} with the selected equipment and programming limits.` })
+    }
+    if (routine.estimatedMinutes > limit) reasons.push({ code: 'SESSION_DURATION_LIMIT', session: routine.name,
+      message: `${routine.name} is estimated at ${routine.estimatedMinutes} minutes, above the ${limit}-minute limit.` })
+    const sessionVolume = countWeeklyVolume([routine], { 1: routine.id })
+    if (Object.values(sessionVolume).some(muscle => muscle.total > plan.evidence.maxMuscleSessionSets)) {
+      reasons.push({ code: 'PROGRAMMING_CAP', session: routine.name,
+        message: `${routine.name} exceeds a per-muscle session cap.` })
+    }
+    for (const entry of routine.ex) {
+      if (entry.mode === 'cardio') continue
+      if (entry.sets !== 3) reasons.push({ code: 'PROGRAMMING_CAP', session: routine.name,
+        message: `${routine.name} contains an exercise outside the three-set prescription.` })
+      const equipment = EXIDX[entry.id]?.eq || EXTRA_EXERCISES.find(ex => ex.id === entry.id)?.eq
+      if ((profile.equipment === 'bodyweight' && equipment !== 'body weight') ||
+          (profile.equipment === 'dumbbells' && !['body weight', 'dumbbell'].includes(equipment))) {
+        reasons.push({ code: 'EQUIPMENT_UNAVAILABLE', session: routine.name,
+          message: `${routine.name} requires equipment outside the selected availability.` })
+      }
+    }
+  }
+  return reasons
+}
+
+/** Select only among candidates that pass every hard constraint. */
+export function selectFeasiblePlan(candidates, profile = {}) {
+  const valid = candidates.map(plan => ({ plan, blockingReasons: validatePlanCandidate(plan, profile) }))
+    .filter(candidate => candidate.blockingReasons.length === 0).map(candidate => candidate.plan)
   const preferred = preferredProgram(profile, normalizedDays(profile.days))
   const novice = !profile.experience || profile.experience === 'beginner' || profile.recovery === 'limited'
-  const scores = candidates.map(plan => ({
+  const scores = valid.map(plan => ({
     programId: plan.programId,
-    score: plan.evidence.workloadScore + plan.evidence.unavailableSessions.length * 2
-      + (plan.programId === preferred ? 0 : 0.4)
+    score: plan.evidence.workloadScore + (plan.programId === preferred ? 0 : 0.4)
       + (novice && plan.evidence.resistanceDays > 3 ? 1.5 : 0),
     shortfall: plan.evidence.workloadScore,
   })).sort((a, b) => a.score - b.score)
-  const recommendedProgramId = scores[0].programId
-  const programId = selectablePrograms().includes(profile.programId) ? profile.programId : recommendedProgramId
-  return { ...candidates.find(plan => plan.programId === programId), recommendedProgramId, alternatives: scores }
+  const recommendedProgramId = scores[0]?.programId || null
+  const explicitlySelected = profile.selectedSplitSource !== 'recommended' && selectablePrograms().includes(profile.programId)
+  const programId = explicitlySelected ? profile.programId : recommendedProgramId
+  const selectedSplitSource = explicitlySelected ? 'user' : 'recommended'
+  const selected = valid.find(plan => plan.programId === programId)
+  if (!selected) {
+    const rejected = candidates.find(plan => plan.programId === programId)
+    const blockingReasons = rejected ? validatePlanCandidate(rejected, profile)
+      : candidates.flatMap(plan => validatePlanCandidate(plan, profile).map(reason => ({ ...reason, split: plan.programId })))
+    if (!blockingReasons.length) blockingReasons.push({ code: 'NO_VALID_SPLIT', message: 'No reviewed split can produce a complete plan within the selected constraints.' })
+    return { status: 'NO_FEASIBLE_PLAN', programId, selectedSplitSource, recommendedProgramId, alternatives: scores, blockingReasons }
+  }
+  return { ...selected, status: selected.evidence.volumeShortfalls.length ? 'VALID_PLAN_WITH_SOFT_TRADEOFFS' : 'VALID_PLAN',
+    selectedSplitSource, recommendedProgramId, alternatives: scores, blockingReasons: [] }
+}
+
+export function buildOnboardingProgram(profile = {}) {
+  const invalid = []
+  if (profile.days != null && (!Number.isInteger(Number(profile.days)) || Number(profile.days) < 2 || Number(profile.days) > 6))
+    invalid.push({ code: 'TRAINING_DAYS', message: 'Choose between 2 and 6 training days.' })
+  if (profile.sessionMinutes != null && ![30, 45, 60, 75, 90].includes(Number(profile.sessionMinutes)))
+    invalid.push({ code: 'SESSION_DURATION_LIMIT', message: 'Choose a supported session duration.' })
+  if (profile.equipment && !EQUIPMENT.some(option => option.value === profile.equipment))
+    invalid.push({ code: 'EQUIPMENT_UNAVAILABLE', message: 'Choose supported available equipment.' })
+  if (profile.programId && profile.selectedSplitSource !== 'recommended' && !selectablePrograms().includes(profile.programId))
+    invalid.push({ code: 'INVALID_SPLIT', message: 'The selected training split is unavailable.' })
+  if (invalid.length) return { status: 'NO_FEASIBLE_PLAN', programId: profile.programId || null,
+    selectedSplitSource: profile.programId && profile.selectedSplitSource !== 'recommended' ? 'user' : 'recommended', recommendedProgramId: null,
+    alternatives: [], blockingReasons: invalid }
+  return selectFeasiblePlan(selectablePrograms().map(id => buildCandidate(profile, id)), profile)
 }
 
 export function recommendationFor(profile = {}) {
-  const { days, goal, programId, recommendedProgramId, name, summary } = buildOnboardingProgram(profile)
-  return { days, goal, programId, recommendedProgramId, name, summary }
+  const { status, days, goal, programId, recommendedProgramId, name, summary, blockingReasons } = buildOnboardingProgram(profile)
+  return { status, days, goal, programId, recommendedProgramId, name, summary, blockingReasons }
 }
 
 /** Apply an onboarding result to a state draft. Workout history is intentionally untouched. */
 export function applyOnboarding(state, profile = {}, now = Date.now(), { preservePlan = false } = {}) {
   const previousAssessment = state.onboarding?.trainingAssessment
   const plan = buildOnboardingProgram({ ...profile, unit: state.unit || profile.unit || 'kg' })
+  if (plan.status === 'NO_FEASIBLE_PLAN' && !preservePlan) return plan
   const currentWeight = Math.round(Number(profile.currentWeight) * 10) / 10
   const height = Number(profile.height) > 0 ? Math.round(Number(profile.height) * 10) / 10 : null
   const targetWeight = (profile.goal === 'lose_weight' || profile.goal === 'gain_weight') && Number(profile.targetWeight) > 0
@@ -267,7 +338,7 @@ export function applyOnboarding(state, profile = {}, now = Date.now(), { preserv
   // Persist the resolved recommendation as the selected program. Fresh onboarding profiles
   // intentionally omit programId until the user either accepts the recommendation or chooses
   // another split.
-  state.onboarding = { ...profile, programId: preservePlan ? state.onboarding?.programId || null : plan.programId, currentWeight, height, targetWeight, completedAt: now, trainingPolicyVersion: preservePlan ? state.onboarding?.trainingPolicyVersion || null : TRAINING_POLICY_VERSION }
+  state.onboarding = { ...profile, programId: preservePlan ? state.onboarding?.programId || null : plan.programId, selectedSplitSource: preservePlan ? state.onboarding?.selectedSplitSource || 'user' : plan.selectedSplitSource, currentWeight, height, targetWeight, completedAt: now, trainingPolicyVersion: preservePlan ? state.onboarding?.trainingPolicyVersion || null : TRAINING_POLICY_VERSION }
   if (!preservePlan) state.onboarding.trainingAssessment = plan.evidence
   else if (previousAssessment) state.onboarding.trainingAssessment = previousAssessment
   if (profile.body === 'male' || profile.body === 'female') state.body = profile.body
