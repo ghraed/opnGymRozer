@@ -1,6 +1,6 @@
 # Training recommendation evidence
 
-Reviewed 27 September 2026; policy version `2026-09-27-v5`.
+Reviewed 27 September 2026; policy version `2026-09-27-v6`.
 
 Setup step 3, the fitness profile editor, and installing a starter program for a completed
 profile use the same planner. All four splits are evaluated against the profile before the
@@ -93,8 +93,10 @@ set targets are soft: a shortfall returns `VALID_PLAN_WITH_SOFT_TRADEOFFS`, not 
 When no candidate works, the planner returns `NO_FEASIBLE_PLAN` rather than an empty plan.
 The search is limited to the app's reviewed movement candidates and schedule templates.
 
-Split ranking sums normalized muscle shortfalls among valid candidates and uses
-availability/experience preferences to resolve similarly feasible options. Novice or
+Split ranking uses a balanced, sex-neutral workload assessment among valid focused
+candidates, then applies the selected physique focus within the chosen split. Matching
+profiles therefore recommend the same split when both focused plans are feasible.
+Availability/experience preferences resolve similarly feasible options. Novice or
 limited-recovery schedules with more than three lifting days receive an additional penalty.
 These score weights are transparent scheduling heuristics, not a clinically validated ranking.
 Two-day variants merge named split sessions. Full-body lifting has recovery days between
@@ -166,24 +168,33 @@ independent direct/indirect arithmetic, actual substitutions, unilateral and set
 all-candidate infeasibility, time and set caps, recovery,
 effort/rest, source coverage and persistence.
 
-## Physique emphasis (v4)
+## Physique emphasis (v6)
 
 The requested female/male mapping changes generated plans across all four splits and goals.
 Female prioritizes glutes, hamstrings and quadriceps; male prioritizes back and shoulders.
 The remaining muscle targets stay in place, as do goal-specific cardio and strength work.
-All split candidates are evaluated using the same emphasis; picking another split does not
-remove it. Existing plans remain preserved unless the user chooses regeneration.
+Every split builds focus-specific routines; picking another split does not remove the
+emphasis. Split ranking uses the same balanced assessment for matching profiles, so sex
+does not by itself choose a different schedule. Existing plans remain preserved unless
+the user chooses regeneration.
 
-Priority muscles have twice the deficit weight in exercise allocation and split scoring.
+Priority muscles have twice the deficit weight in exercise allocation; split scoring uses balanced targets.
 Experienced clients with normal recovery receive a target one three-set block higher for
 those muscles; beginners/returners keep the original target with changed selection priority.
 These exact priorities and additions are product heuristics, not study-derived sex formulas.
 Time, equipment and per-session caps still apply and unmet targets remain visible.
 
-Lower-body sessions can offer floor hip extensions alongside squats and hinges. Back days
-can offer vertical pulling and rear-shoulder work; upper-body sessions can offer lateral
-raises. Full-body templates can offer both patterns. Substitution still uses reviewed
-movement families and actual muscle credits. No unavailable equipment is silently assumed.
+Lower-body sessions can offer floor hip extensions, single-leg, quad and hamstring
+work alongside squats and hinges. Cardio goals can use a floor hip extension with lower
+setup time, while push days can hold trunk work to free room on leg days. Back days can
+offer vertical pulling, upper-back and
+rear-shoulder work; upper-body sessions can offer lateral raises. The allocator reserves
+a suitable direct focus compound and accessory when time and equipment permit, then
+fills other muscle needs. If a focus slot would leave a major muscle wholly untrained,
+a redundant resistance exercise can be swapped for coverage. Full-body templates can
+offer both patterns. The preview shows direct and indirect focus volume for the actual
+week. Substitution still uses reviewed movement families and actual muscle credits.
+No unavailable equipment is silently assumed.
 
 - [Plotkin et al. (2023)](https://pubmed.ncbi.nlm.nih.gov/37877099/): in 34 untrained
   participants, nine weeks of squat or hip-thrust training produced similar glute growth,

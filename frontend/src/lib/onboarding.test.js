@@ -204,6 +204,22 @@ describe('research-informed onboarding recommendations', () => {
     }
   })
 
+  it('keeps an existing schedule when sex changes until plan replacement is selected', () => {
+    const profile = { goal: 'muscle', currentWeight: 80, height: 175, days: 4, experience: 'intermediate', equipment: 'full_gym', sessionMinutes: 60 }
+    const state = { bodyweight: [], routines: [], week: {}, customEx: [], workouts: [{ id: 'completed' }] }
+    applyOnboarding(state, { ...profile, sex: 'male' }, 1)
+    const originalWeek = { ...state.week }
+    const originalRoutineIds = state.routines.map(routine => routine.id)
+    applyOnboarding(state, { ...profile, sex: 'female' }, 2, { preservePlan: true })
+    expect(state.onboarding.sex).toBe('female')
+    expect(state.week).toEqual(originalWeek)
+    expect(state.routines.map(routine => routine.id)).toEqual(originalRoutineIds)
+    applyOnboarding(state, { ...profile, sex: 'female' }, 3)
+    expect(state.onboarding.trainingAssessment.physiqueFocus.id).toBe('feminine')
+    expect(state.week).not.toEqual(originalWeek)
+    expect(state.workouts).toEqual([{ id: 'completed' }])
+  })
+
   it('carries comfortable-pace cardio and prescribed rest into actual workout logging', () => {
     const plan = buildOnboardingProgram({ goal: 'fitness', days: 3, equipment: 'dumbbells' })
     const cfg = plan.routines[0].ex.find(entry => entry.mode === 'cardio')

@@ -34,6 +34,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
     {plan.recommendedProgramId && <p className="recommendation-guidance">{t('A feasible alternative is {0}. Select it or use automatic recommendation.', t(programById(plan.recommendedProgramId).name))}</p>}
   </section>
   const focus = plan.evidence.physiqueFocus || physiqueFocusFor(profile)
+  const focusVolume = focus.muscles.map(muscle => plan.evidence.weeklyVolume.find(item => item.muscle === muscle)).filter(Boolean)
   const recommended = programById(plan.recommendedProgramId)
   const automatic = !profile.programId
   const source = id => TRAINING_SOURCES.find(item => item.id === id)
@@ -59,6 +60,14 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
       <p className="small muted" role="status">{t(plan.status === 'VALID_PLAN_WITH_SOFT_TRADEOFFS' ? 'Feasible plan with some starting workload targets below budget.' : 'Feasible plan within the selected hard limits.')}</p>
       <p className="accent"><strong>{t(focus.label)}</strong></p>
       <p>{t(focus.description)}</p>
+      {focusVolume.length > 0 && <div aria-label={t(focus.label)} className="setup-volume-grid">
+        {focusVolume.map(muscle => <div className="setup-volume-item" key={muscle.muscle}>
+          <div><strong>{t(muscle.label)}</strong><span>{t('{0} / {1} sets', muscle.total, muscle.target)}</span></div>
+          <meter min="0" max={Math.max(muscle.target, muscle.total)} value={muscle.total} aria-label={t('{0}: {1} estimated sets; starting budget {2}', t(muscle.label), muscle.total, muscle.target)} />
+          <p>{t('{0} direct + {1} indirect · {2} sessions', muscle.direct, muscle.indirect, muscle.sessions)}</p>
+          {muscle.shortfall > 0 && <small>{t('{0} below starting budget', muscle.shortfall)}</small>}
+        </div>)}
+      </div>}
       <p>{t('{0} lifting days · {1} aerobic days per week', plan.evidence.resistanceDays, plan.evidence.aerobicDays)}</p>
     </div>
     <details className="setup-evidence" open>

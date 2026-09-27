@@ -96,6 +96,23 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   // Distinct movement patterns get a preference even when broad muscle totals
   // overlap (for example, lateral raises versus overhead pressing).
   const coveredMovements = new Set()
+  const directlyFocused = entry => limits.physiqueFocus.muscles.some(muscle => entry.muscles?.[muscle] === 1)
+  // Reserve a focus compound and an isolation movement on suitable days before
+  // the general workload search fills the rest. A reservation is skipped whenever
+  // it would exceed the same time or per-session caps as any other exercise.
+  if (limits.physiqueFocus.muscles.length) for (const routine of resistance) {
+    const focused = routine.ex.filter(directlyFocused)
+    const mains = focused.filter(entry => entry.mainLift)
+    if (limits.physiqueFocus.id === 'feminine') mains.sort((a, b) => Number(b.muscles?.glutes === 1) - Number(a.muscles?.glutes === 1))
+    const main = mains.find(entry => canSelect(routine, entry))
+    if (main) { main.sets = WORKING_SETS; coveredMovements.add(main.movement) }
+    const preferredAccessory = limits.physiqueFocus.id === 'feminine' ? 'Hip extension'
+      : ['Pull', 'Back'].includes(routine.exerciseFilter?.label) ? 'Upper-back accessory' : 'Rear shoulder / upper back'
+    const accessories = focused.filter(entry => !entry.mainLift)
+      .sort((a, b) => Number(b.movement === preferredAccessory) - Number(a.movement === preferredAccessory))
+    const accessory = accessories.find(entry => canSelect(routine, entry))
+    if (accessory) { accessory.sets = WORKING_SETS; coveredMovements.add(accessory.movement) }
+  }
   let volume = countWeeklyVolume(routines, week)
   for (;;) {
     let best = null, bestScore = 0
@@ -120,6 +137,32 @@ export function allocateWeeklySets(routines, week, profile = {}) {
     best.sets = WORKING_SETS
     coveredMovements.add(best.movement)
     volume = countWeeklyVolume(routines, week)
+  }
+  // A focus reservation can make the last slot scarce. If a muscle would have
+  // no work at all, swap a redundant resistance exercise for suitable direct
+  // work while retaining every muscle group already covered.
+  for (const muscle of Object.keys(MUSCLES)) {
+    if (volume[muscle].total > 0) continue
+    let repaired = false
+    for (const routine of resistance) {
+      if (repaired) break
+      for (const candidate of routine.ex.filter(entry => !entry.sets && entry.muscles?.[muscle] === 1)) {
+        const replaceable = routine.ex.filter(entry => entry.mode !== 'cardio' && entry.sets)
+          .sort((a, b) => Number(directlyFocused(a)) - Number(directlyFocused(b)) || Number(a.mainLift) - Number(b.mainLift))
+        for (const replaced of replaceable) {
+          replaced.sets = 0
+          const without = countWeeklyVolume(routines, week)
+          if (Object.keys(MUSCLES).every(key => volume[key].total === 0 || without[key].total > 0) && canSelect(routine, candidate)) {
+            candidate.sets = WORKING_SETS
+            volume = countWeeklyVolume(routines, week)
+            repaired = true
+            break
+          }
+          replaced.sets = WORKING_SETS
+        }
+        if (repaired) break
+      }
+    }
   }
   for (const routine of routines) {
     routine.ex = routine.ex.filter(e => e.sets > 0)

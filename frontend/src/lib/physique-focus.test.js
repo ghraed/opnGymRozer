@@ -30,6 +30,63 @@ it('selects distinct physique work and keeps balanced primary training', () => {
   expect(volume(male, 'back')).toBeGreaterThan(volume(female, 'back'))
 })
 
+it('keeps the same split while making direct focus work distinct in every standard gym split', () => {
+  const daysBySplit = { full_body: 3, upper_lower: 4, ppl: 6, bro_split: 5 }
+  const direct = (plan, muscle) => plan.evidence.weeklyVolume.find(item => item.muscle === muscle).direct
+  for (const [programId, days] of Object.entries(daysBySplit)) {
+    const profile = { ...base, programId, days }
+    const female = buildOnboardingProgram({ ...profile, sex: 'female' })
+    const male = buildOnboardingProgram({ ...profile, sex: 'male' })
+    expect(female.status).not.toBe('NO_FEASIBLE_PLAN')
+    expect(male.status).not.toBe('NO_FEASIBLE_PLAN')
+    expect(female.programId).toBe(male.programId)
+    expect(Object.keys(female.week)).toEqual(Object.keys(male.week))
+    expect(female.routines.map(r => r.name)).toEqual(male.routines.map(r => r.name))
+    expect(direct(female, 'glutes')).toBeGreaterThan(direct(male, 'glutes'))
+    expect(direct(female, 'quads') + direct(female, 'hamstrings'))
+      .toBeGreaterThanOrEqual(direct(male, 'quads') + direct(male, 'hamstrings'))
+    expect(direct(male, 'back')).toBeGreaterThan(direct(female, 'back'))
+    expect(direct(male, 'shoulders')).toBeGreaterThan(direct(female, 'shoulders'))
+    expect(female.evidence.missingMuscles).toEqual([])
+    expect(male.evidence.missingMuscles).toEqual([])
+  }
+})
+
+it('keeps sex-based emphasis across goals and ranks automatic splits without sex', () => {
+  const direct = (plan, muscle) => plan.evidence.weeklyVolume.find(item => item.muscle === muscle).direct
+  for (const goal of ['muscle', 'strength', 'lose_weight', 'fitness']) {
+    for (const [programId, days] of Object.entries({ full_body: 3, upper_lower: 4, ppl: 6, bro_split: 5 })) {
+      const profile = { ...base, goal, programId, days }
+      const female = buildOnboardingProgram({ ...profile, sex: 'female' })
+      const male = buildOnboardingProgram({ ...profile, sex: 'male' })
+      expect(direct(female, 'glutes')).toBeGreaterThan(direct(male, 'glutes'))
+      expect(direct(male, 'back') + direct(male, 'shoulders'))
+        .toBeGreaterThan(direct(female, 'back') + direct(female, 'shoulders'))
+      if (['lose_weight', 'fitness'].includes(goal)) {
+        expect(female.evidence.cardioMinutes).toBe(male.evidence.cardioMinutes)
+        expect(female.routines.flatMap(routine => routine.ex).filter(entry => entry.mode === 'cardio')
+          .every(entry => entry.sets === 1)).toBe(true)
+      }
+    }
+    for (const days of [2, 3, 4, 5, 6]) for (const equipment of ['full_gym', 'dumbbells', 'bodyweight']) {
+      const profile = { ...base, goal, days, equipment, programId: null }
+      const female = buildOnboardingProgram({ ...profile, sex: 'female' })
+      const male = buildOnboardingProgram({ ...profile, sex: 'male' })
+      expect(female.programId).toBe(male.programId)
+      expect(female.recommendedProgramId).toBe(male.recommendedProgramId)
+    }
+  }
+})
+
+it('reports focus shortfalls when a short bodyweight plan cannot cover them', () => {
+  for (const sex of ['female', 'male']) {
+    const plan = buildOnboardingProgram({ ...base, sex, days: 2, equipment: 'bodyweight', sessionMinutes: 30, recovery: 'limited' })
+    expect(plan.status).toBe('VALID_PLAN_WITH_SOFT_TRADEOFFS')
+    expect(plan.evidence.volumeShortfalls.some(item => plan.evidence.physiqueFocus.muscles.includes(item.muscle))).toBe(true)
+    expect(plan.routines.every(routine => routine.estimatedMinutes <= 30)).toBe(true)
+  }
+})
+
 it('keeps novice/returner budgets conservative and does not infer sex from the diagram', () => {
   for (const sex of ['female', 'male']) {
     const novice = trainingConstraints({ ...base, sex, experience: 'beginner' })

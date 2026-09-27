@@ -76,20 +76,34 @@ function applyPrescription(entry, profile) {
 }
 
 function adaptRoutine(routine, profile) {
+  const focus = physiqueFocusFor(profile)
+  const day = routine.exerciseFilter?.label || routine.name
   const used = new Set()
   const entries = routine.ex.map(entry => {
+    // Rows and overhead presses retain upper-body training. Skip extra rear-delt
+    // isolation and push-day lateral raises for the lower-body focus.
+    if (focus.id === 'feminine' && (['0383', '0120'].includes(entry.id) || (entry.id === '0334' && day === 'Push'))) return null
     const replacement = selectMovement(entry, profile, used)
     if (!replacement) return null
     used.add(replacement.id)
     return replacement
   }).filter(Boolean)
-  const focus = physiqueFocusFor(profile)
   const has = muscle => entries.some(e => e.muscles[muscle] > 0)
-  // Add candidates only to an appropriate day; the volume/time allocator decides
-  // what fits. Keep push/pull and upper/lower days faithful to the chosen split.
-  const candidates = focus.id === 'feminine' && has('glutes') ? ['1409']
-    : focus.id === 'v_shape' ? [...(has('back') ? ['2330', '0383'] : []), ...(has('shoulders') ? ['0334'] : [])] : []
-  for (const id of candidates) {
+  // Offer extra direct work on the matching day. These are candidates rather than
+  // mandatory additions: equipment, recovery and session limits still decide what fits.
+  const lowerDay = /^(Legs|Lower body|Full body)$|^(Leg Day|Lower |Full Body|Strength [ABC])/.test(day)
+  const upperDay = /^(Upper body|Full body|Push|Pull|Back|Shoulders)$|^(Upper |Full Body|Strength [ABC])/.test(day)
+  const candidates = focus.id === 'feminine' && lowerDay && (has('glutes') || has('quads') || has('hamstrings'))
+    ? [profile.goal === 'fitness' || profile.goal === 'lose_weight' ? '3013' : '1409', '0410', '0585', '0586']
+    : focus.id === 'v_shape' && upperDay
+      ? day === 'Push' ? ['0334']
+        : day === 'Pull' || day === 'Back' ? ['2330', '0383', '0095']
+          : day === 'Shoulders' ? ['0334', '0383']
+            : ['2330', '0383', '0334', '0095']
+      : []
+  // Trunk work can sit on a push day so the leg day keeps room for lower-body
+  // compounds when aerobic finishers shorten its resistance block.
+  for (const id of [...candidates, ...(day === 'Push' ? ['0276'] : [])]) {
     if (entries.some(e => e.movement === movementFor(id)?.label)) continue
     const entry = selectMovement({ id }, profile, used)
     if (entry) { entries.push(entry); used.add(entry.id) }
@@ -278,17 +292,23 @@ export function validatePlanCandidate(plan, profile = {}) {
 }
 
 /** Select only among candidates that pass every hard constraint. */
-export function selectFeasiblePlan(candidates, profile = {}) {
+export function selectFeasiblePlan(candidates, profile = {}, rankingCandidates = candidates) {
   const valid = candidates.map(plan => ({ plan, blockingReasons: validatePlanCandidate(plan, profile) }))
     .filter(candidate => candidate.blockingReasons.length === 0).map(candidate => candidate.plan)
   const preferred = preferredProgram(profile, normalizedDays(profile.days))
   const novice = !profile.experience || profile.experience === 'beginner' || profile.recovery === 'limited'
-  const scores = valid.map(plan => ({
-    programId: plan.programId,
-    score: plan.evidence.workloadScore + (plan.programId === preferred ? 0 : 0.4)
-      + (novice && plan.evidence.resistanceDays > 3 ? 1.5 : 0),
-    shortfall: plan.evidence.workloadScore,
-  })).sort((a, b) => a.score - b.score)
+  const rankingById = new Map(rankingCandidates.map(plan => [plan.programId, plan]))
+  // Compare splits using the same balanced workload for both sexes. The selected
+  // split still receives the focus-specific routines built for this profile.
+  const scores = valid.map(plan => {
+    const ranking = rankingById.get(plan.programId) || plan
+    return {
+      programId: plan.programId,
+      score: ranking.evidence.workloadScore + (plan.programId === preferred ? 0 : 0.4)
+        + (novice && plan.evidence.resistanceDays > 3 ? 1.5 : 0),
+      shortfall: ranking.evidence.workloadScore,
+    }
+  }).sort((a, b) => a.score - b.score)
   const recommendedProgramId = scores[0]?.programId || null
   const explicitlySelected = profile.selectedSplitSource !== 'recommended' && selectablePrograms().includes(profile.programId)
   const programId = explicitlySelected ? profile.programId : recommendedProgramId
@@ -318,7 +338,11 @@ export function buildOnboardingProgram(profile = {}) {
   if (invalid.length) return { status: 'NO_FEASIBLE_PLAN', programId: profile.programId || null,
     selectedSplitSource: profile.programId && profile.selectedSplitSource !== 'recommended' ? 'user' : 'recommended', recommendedProgramId: null,
     alternatives: [], blockingReasons: invalid }
-  return selectFeasiblePlan(selectablePrograms().map(id => buildCandidate(profile, id)), profile)
+  const ids = selectablePrograms()
+  const candidates = ids.map(id => buildCandidate(profile, id))
+  const rankingCandidates = ['male', 'female'].includes(profile.sex)
+    ? ids.map(id => buildCandidate({ ...profile, sex: 'unspecified' }, id)) : candidates
+  return selectFeasiblePlan(candidates, profile, rankingCandidates)
 }
 
 export function recommendationFor(profile = {}) {

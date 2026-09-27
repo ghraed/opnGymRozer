@@ -31,7 +31,7 @@ export const MOVEMENTS = {
   knee: family('Knee extension accessory', false, ['0585'], ['1760', '0413'], ['1685']),
   hamstrings: family('Knee flexion / posterior chain', false, ['0586', '0599'], ['0300'], ['3013']),
   calves: family('Calf raise', false, ['0605', '0594', '1396'], ['0417', '1373'], ['1373']),
-  gluteExtension: family('Hip extension', false, ['1409'], ['og-db-glute-bridge'], ['3013'], ['3013']),
+  gluteExtension: family('Hip extension', false, ['1409', '3013'], ['og-db-glute-bridge'], ['3013'], ['3013']),
   hips: family('Hip accessory', false, ['0598'], ['0413'], ['3013']),
   core: family('Trunk control', false, ['0276', '0175', '0472', '0687'], ['0276'], ['0276'], ['0276']),
   scapula: family('Scapular control', false, ['3021'], ['3021'], ['3021']),
