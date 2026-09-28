@@ -250,7 +250,7 @@ export default function ClientDashboard() {
     {error && <div className="card" role="alert"><p>{error}</p><Button size="sm" onClick={reload}>Try again</Button></div>}
     <section className="card client-profile" aria-labelledby="client-name">
       <div className="client-identity">
-        <ProfileAvatar value={detail.profileImage} name={u.name} className="client-avatar" />
+        <ProfileAvatar value={detail.profileImage} name={u.name} className="client-avatar" viewable />
         <div className="grow"><h2 id="client-name" className="capitalize">{u.name}</h2>
           <div className="client-badges"><span className="tag acc">{u.admin ? 'Trainer' : 'Client'}</span><span className={'tag' + (u.disabled ? ' client-disabled' : '')}>{u.disabled ? 'Account disabled' : needsActivation(u) ? 'Pending activation' : 'Account active'}</span></div>
           <p className="small muted">{u.created ? 'Joined ' + fmtDate(u.created.slice(0, 10)) + ' · ' : ''}Synced {rel(detail.lastSync)}</p>
