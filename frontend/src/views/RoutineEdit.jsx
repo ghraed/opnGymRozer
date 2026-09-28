@@ -11,7 +11,7 @@ import { glyphPicker, exercisePicker, exConfigSheet, confirmSheet, muscleExercis
 import Icon from '../components/Icon.jsx'
 import ExerciseActionsMenu from '../components/ExerciseActionsMenu.jsx'
 import { glyphOf } from '../lib/glyphs.js'
-import { Button, SelectRow } from '../components/ui.jsx'
+import { Button, SelectRow, openSelectSheet } from '../components/ui.jsx'
 import { POLICIES_FOR, POLICY_NAME, POLICY_DESC } from '../lib/progression.js'
 import BodyMap from '../components/BodyMap.jsx'
 import { loadOfRoutine, rankOf, MUSCLE_NAME } from '../lib/muscles.js'
@@ -27,6 +27,16 @@ export default function RoutineEdit() {
 
   const edit = fn => update(s => { fn(s.routines.find(x => x.id === id).ex) })
   const move = (i, dir) => edit(ex => { const j = i + dir; if (j < 0 || j >= ex.length) return;[ex[i], ex[j]] = [ex[j], ex[i]]; cleanupSg(ex) })
+  const moveToPosition = i => openSelectSheet({
+    title: t('Move to position'), value: i,
+    options: r.ex.map((entry, j) => ({ value: j, label: `${j + 1}. ${exOr(entry.id).n}` })),
+    onChange: j => edit(entries => {
+      if (i === j) return
+      const [entry] = entries.splice(i, 1)
+      entries.splice(j, 0, entry)
+      cleanupSg(entries)
+    })
+  })
   const replace = i => {
     const original = r.ex[i]
     const picker = exercisePicker(ex => {
@@ -102,6 +112,7 @@ export default function RoutineEdit() {
             <ExerciseActionsMenu name={ex.n} actions={[
               ...(modeOf(e) === 'reps' ? [{ label: t('Drop set'), icon: 'arrowDown', checked: dropCount(e.drops) > 0, onClick: () => toggleDrop(i) }] : []),
               ...(i > 0 ? [{ label: t('Superset with exercise above'), icon: 'link', checked: !!linkedPrev, onClick: () => toggleLink(i) }] : []),
+              ...(r.ex.length > 1 ? [{ label: t('Move to position'), icon: 'list', onClick: () => moveToPosition(i) }] : []),
               { label: t('Replace exercise'), icon: 'shuffle', onClick: () => replace(i) },
               { label: t('Remove exercise'), icon: 'trash', danger: true, onClick: () => remove(i) },
             ]} />
@@ -110,11 +121,6 @@ export default function RoutineEdit() {
               <button className="iconbtn" aria-label="Move down" style={{ width: 28, height: 24, borderRadius: 7, fontSize: 12 }} onClick={ev => { ev.stopPropagation(); move(i, 1) }}><Icon name="chevronDown" /></button>
             </div>
           </div>
-        </div>
-        <div className="row" style={{ padding: '0 12px 12px', gap: 8, flexWrap: 'wrap' }}>
-          <SelectRow title={t('Move to position')} value={i} onChange={j => edit(entries => {
-            const [entry] = entries.splice(i, 1); entries.splice(j, 0, entry); cleanupSg(entries)
-          })} options={r.ex.map((entry, j) => ({ value: j, label: `${j + 1}. ${exOr(entry.id).n}` }))} />
         </div>
       </div>
     })}</div> : <div className="empty"><div className="ico"><Icon name="dumbbell" /></div>{t('No exercises yet — add your first one.')}</div>}
