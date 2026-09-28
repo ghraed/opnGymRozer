@@ -20,7 +20,8 @@ import { buildPlanBundle, parsePlan, mergePlan, printPlan } from './lib/plan-sha
 import { estimate1RM, best1RM, is1RMRecord, REP_CAP } from './lib/onerm.js'
 import { nextPrescription, applyPrescription, policyFor, defaultIncrement, POLICIES_FOR, POLICY_NAME, POLICY_DESC, MAX_BW_SETS } from './lib/progression.js'
 import { MOBILE, shareExport } from './lib/mobile.js'
-import { buildOnboardingProgram } from './lib/onboarding.js'
+import { buildOnboardingProgram, applyPersonalizedProgram } from './lib/onboarding.js'
+import { MUSCLES } from './lib/training-volume.js'
 import Onboarding from './components/Onboarding.jsx'
 
 const S = () => useStore.getState().S
@@ -52,26 +53,23 @@ const PROGRAM_ICONS = { ppl: 'barbell', upper_lower: 'figureStrength', full_body
 function ProgramBuilder({ close }) {
   const st = useStore(s => s.S)
   const [selected, setSelected] = useState(null)
+  const personalizedPlan = selected && st.onboarding?.completedAt
+    ? buildOnboardingProgram({ ...st.onboarding, unit: st.unit, programId: selected.id, selectedSplitSource: 'user' })
+    : null
+  const blockedPersonalizedPlan = personalizedPlan?.status === 'NO_FEASIBLE_PLAN'
 
   const install = empty => {
-    const personalized = !empty && st.onboarding?.completedAt
-    const built = personalized
-      ? buildOnboardingProgram({ ...st.onboarding, unit: st.unit, programId: selected.id })
-      : buildProgram(selected.id, { empty })
+    const personalized = !empty && !!personalizedPlan
+    if (personalized && blockedPersonalizedPlan) return
+    const built = personalized ? personalizedPlan : buildProgram(selected.id, { empty })
     update(s => {
-      s.routines.push(...built.routines)
-      // Choosing a program makes its schedule the active week. Existing routines remain
-      // available, but stale day assignments cannot accidentally mix two programs.
-      s.week = built.week
-      s.dayPlan = {}
-      if (personalized) {
-        s.customEx ||= []
-        for (const exercise of built.customEx) {
-          if (!s.customEx.some(existing => existing.id === exercise.id)) s.customEx.push({ ...exercise })
-        }
-        s.onboarding.programId = selected.id
-        s.onboarding.trainingPolicyVersion = built.evidence.policyVersion
-        s.onboarding.trainingAssessment = built.evidence
+      if (personalized) applyPersonalizedProgram(s, built)
+      else {
+        s.routines.push(...built.routines)
+        // Choosing a program makes its schedule the active week. Existing routines remain
+        // available, but stale day assignments cannot accidentally mix two programs.
+        s.week = built.week
+        s.dayPlan = {}
       }
     })
     close()
@@ -98,9 +96,16 @@ function ProgramBuilder({ close }) {
       <h3 style={{ margin: 0 }}>{t(selected.name)}</h3>
     </div>
     <div className="muted small" style={{ margin: '0 0 14px 48px' }}>{t(selected.summary)}</div>
+    {blockedPersonalizedPlan && <div className="recommendation-warning" role="alert">
+      <strong>{t('This generated program cannot be applied with your current training choices.')}</strong>
+      <ul>{personalizedPlan.blockingReasons.map((reason, index) => <li key={index}>{reason.code === 'MISSING_MUSCLE_COVERAGE'
+        ? t('No counted weekly work for: {0}. Choose another split, allow more session time, or change available equipment.', reason.muscles.map(muscle => t(MUSCLES[muscle])).join(', '))
+        : t(reason.message)}</li>)}</ul>
+      {personalizedPlan.recommendedProgramId && <p>{t('A feasible alternative is {0}.', t(PROGRAMS.find(program => program.id === personalizedPlan.recommendedProgramId)?.name))}</p>}
+    </div>}
     <h4 className="sec" style={{ marginTop: 0 }}>{t('How do you want to start?')}</h4>
     <div className="list">
-      <div className="item" onClick={() => install(false)}>
+      <div className={'item' + (blockedPersonalizedPlan ? ' dim' : '')} aria-disabled={blockedPersonalizedPlan || undefined} onClick={() => { if (!blockedPersonalizedPlan) install(false) }}>
         <span className="lrow-i"><Icon name="sparkles" /></span>
         <div className="grow"><div className="tt">{t('Use the default program')}</div><div className="ss">{t('Balanced exercises, sets and reps are ready for you')}</div></div>
         <Icon name="chevronRight" className="chev" />

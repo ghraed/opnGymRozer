@@ -2,7 +2,7 @@ import { buildProgram, programById, PROGRAMS } from './starter.js'
 import { todayISO, uid } from './format.js'
 import { movementFor, selectMovement, EXTRA_EXERCISES } from './training-movements.js'
 import { TRAINING_POLICY_VERSION, TRAINING_SOURCES } from './training-evidence.js'
-import { allocateWeeklySets, countWeeklyVolume, estimateSessionMinutes, trainingConstraints } from './training-volume.js'
+import { allocateWeeklySets, countWeeklyVolume, estimateSessionMinutes, trainingConstraints, MUSCLES } from './training-volume.js'
 import { physiqueFocusFor } from './physique-focus.js'
 import { EXIDX } from './exercises.js'
 
@@ -289,6 +289,10 @@ export function validatePlanCandidate(plan, profile = {}) {
       }
     }
   }
+  const weeklyVolume = countWeeklyVolume(plan.routines, plan.week)
+  const missingMuscles = Object.keys(MUSCLES).filter(muscle => weeklyVolume[muscle].total <= 0)
+  if (missingMuscles.length) reasons.push({ code: 'MISSING_MUSCLE_COVERAGE', muscles: missingMuscles,
+    message: `No counted weekly work for: ${missingMuscles.map(muscle => MUSCLES[muscle]).join(', ')}. Choose another split, allow more session time, or change available equipment.` })
   return reasons
 }
 
@@ -385,4 +389,21 @@ export function applyOnboarding(state, profile = {}, now = Date.now(), { preserv
     state.dayPlan = {}
   }
   return plan
+}
+
+/** Install a chosen personalized split without touching workout history. */
+export function applyPersonalizedProgram(state, plan) {
+  if (!['VALID_PLAN', 'VALID_PLAN_WITH_SOFT_TRADEOFFS'].includes(plan?.status)) return false
+  state.routines.push(...plan.routines)
+  state.week = plan.week
+  state.dayPlan = {}
+  state.customEx ||= []
+  for (const exercise of plan.customEx) {
+    if (!state.customEx.some(existing => existing.id === exercise.id)) state.customEx.push({ ...exercise })
+  }
+  state.onboarding.programId = plan.programId
+  state.onboarding.selectedSplitSource = 'user'
+  state.onboarding.trainingPolicyVersion = plan.evidence.policyVersion
+  state.onboarding.trainingAssessment = plan.evidence
+  return true
 }

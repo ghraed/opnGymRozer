@@ -80,13 +80,14 @@ sides; rest is counted once between sets. These time assumptions are planning es
 not study findings or promises of exact workout length.
 The preview reports direct, weighted indirect and total sets, session counts, starting
 budgets, and shortfalls. It explains each exercise's own weekly sets alongside its target
-muscles' totals. Missing muscle work is disclosed as a soft workload gap. A session without a suitable
-exercise blocks application of that candidate. The app does not silently exceed the time
-limit or claim every split meets every budget.
+muscles' totals. A candidate with no counted work for any of the ten displayed muscle groups
+cannot be applied. A session without a suitable exercise also blocks that candidate.
+The app does not silently exceed the time limit or claim every split meets every budget.
 
 Hard validation runs before split ranking. A candidate must cover the selected days with
 nonempty workouts, keep each estimated session within the selected limit, use available
-equipment, and respect three-set prescriptions and per-muscle session caps. Invalid splits
+equipment, provide positive weekly counted work for all ten displayed muscle groups,
+and respect three-set prescriptions and per-muscle session caps. Invalid splits
 are excluded from automatic recommendations. An explicitly selected invalid split returns
 `NO_FEASIBLE_PLAN` with blocking reasons; the app does not switch it automatically. Weekly
 set targets are soft: a shortfall returns `VALID_PLAN_WITH_SOFT_TRADEOFFS`, not failure.

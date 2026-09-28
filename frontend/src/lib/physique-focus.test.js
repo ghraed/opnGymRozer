@@ -78,11 +78,12 @@ it('keeps sex-based emphasis across goals and ranks automatic splits without sex
   }
 })
 
-it('reports focus shortfalls when a short bodyweight plan cannot cover them', () => {
+it('reports soft shortfalls in a complete short bodyweight plan', () => {
   for (const sex of ['female', 'male']) {
-    const plan = buildOnboardingProgram({ ...base, sex, days: 2, equipment: 'bodyweight', sessionMinutes: 30, recovery: 'limited' })
+    const plan = buildOnboardingProgram({ ...base, sex, days: 2, equipment: 'bodyweight', hasPullStation: true, sessionMinutes: 30, recovery: 'limited' })
     expect(plan.status).toBe('VALID_PLAN_WITH_SOFT_TRADEOFFS')
-    expect(plan.evidence.volumeShortfalls.some(item => plan.evidence.physiqueFocus.muscles.includes(item.muscle))).toBe(true)
+    expect(plan.evidence.volumeShortfalls.length).toBeGreaterThan(0)
+    expect(plan.evidence.missingMuscles).toEqual([])
     expect(plan.routines.every(routine => routine.estimatedMinutes <= 30)).toBe(true)
   }
 })
@@ -104,13 +105,14 @@ it('keeps novice/returner budgets conservative and does not infer sex from the d
 it('keeps short sessions and equipment restrictions for both focuses at every availability', () => {
   for (const sex of ['female', 'male']) for (const days of [2, 3, 4, 5, 6]) {
     for (const equipment of ['full_gym', 'dumbbells', 'bodyweight']) {
-      const plan = buildOnboardingProgram({ ...base, sex, days, equipment, sessionMinutes: 30, recovery: 'limited' })
+      const plan = buildOnboardingProgram({ ...base, sex, days, equipment, hasPullStation: equipment === 'bodyweight', sessionMinutes: 30, recovery: 'limited' })
+      expect(plan.status).not.toBe('NO_FEASIBLE_PLAN')
       expect(Object.keys(plan.week)).toHaveLength(days)
       expect(plan.routines.every(r => r.estimatedMinutes <= 30)).toBe(true)
       expect(plan.evidence.physiqueFocus).toEqual(physiqueFocusFor({ sex }))
+      expect(plan.evidence.missingMuscles).toEqual([])
       if (equipment === 'bodyweight') {
         expect(entries(plan).some(e => ['1409', 'og-db-glute-bridge', '0334', '2330'].includes(e.id))).toBe(false)
-        expect(plan.evidence.missingMuscles).toContain('Back')
       }
     }
   }

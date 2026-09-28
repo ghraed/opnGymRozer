@@ -29,7 +29,9 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
     {profile.programId && <Button type="button" size="sm" className="setup-auto-program" onClick={() => onChoose(null)}>{t('Use automatic recommendation')}</Button>}
     <div className="recommendation-warning" role="alert">
       <strong>{t('No feasible plan for these choices')}</strong>
-      <ul>{plan.blockingReasons.map((reason, index) => <li key={index}>{reason.split ? `${t(programById(reason.split).name)}: ` : ''}{t(reason.message)}</li>)}</ul>
+      <ul>{plan.blockingReasons.map((reason, index) => <li key={index}>{reason.split ? `${t(programById(reason.split).name)}: ` : ''}{reason.code === 'MISSING_MUSCLE_COVERAGE'
+        ? t('No counted weekly work for: {0}. Choose another split, allow more session time, or change available equipment.', reason.muscles.map(muscle => t(MUSCLES[muscle])).join(', '))
+        : t(reason.message)}</li>)}</ul>
     </div>
     {plan.recommendedProgramId && <p className="recommendation-guidance">{t('A feasible alternative is {0}. Select it or use automatic recommendation.', t(programById(plan.recommendedProgramId).name))}</p>}
   </section>
