@@ -169,7 +169,7 @@ independent direct/indirect arithmetic, actual substitutions, unilateral and set
 all-candidate infeasibility, time and set caps, recovery,
 effort/rest, source coverage and persistence.
 
-## Physique emphasis (v6)
+## Physique emphasis (v6; workload balance revised in v8)
 
 The requested female/male mapping changes generated plans across all four splits and goals.
 Female prioritizes glutes, hamstrings and quadriceps; male prioritizes back and shoulders.
@@ -182,16 +182,22 @@ the user chooses regeneration.
 Priority muscles have twice the deficit weight in exercise allocation; split scoring uses balanced targets.
 Experienced clients with normal recovery receive a target one three-set block higher for
 those muscles; beginners/returners keep the original target with changed selection priority.
-These exact priorities and additions are product heuristics, not study-derived sex formulas.
-Time, equipment and per-session caps still apply and unmet targets remain visible.
+Selection and split ranking also charge a soft per-muscle cost of
+`2 × (max(0, estimated weekly sets − target) / target)²`. This makes
+large overshoots less attractive without treating the target as a hard limit. The
+three-set exercise prescription and direct/half-credit indirect model remain unchanged.
+These priorities, additions, and the overshoot cost are product heuristics, not
+study-derived sex formulas or measurements of muscle growth. Time, equipment and
+per-session caps still apply and unmet targets remain visible.
 
 Lower-body sessions can offer floor hip extensions, single-leg, quad and hamstring
 work alongside squats and hinges. Cardio goals can use a floor hip extension with lower
 setup time, while push days can hold trunk work to free room on leg days. Back days can
 offer vertical pulling, upper-back and
 rear-shoulder work; upper-body sessions can offer lateral raises. The allocator reserves
-a suitable direct focus compound and accessory when time and equipment permit, then
-fills other muscle needs. If a focus slot would leave a major muscle wholly untrained,
+at most one suitable direct focus compound and one distinct accessory across the
+week when they provide a positive net benefit, then fills other muscle needs. If a
+focus slot would leave a major muscle wholly untrained,
 a redundant resistance exercise can be swapped for coverage. Full-body templates can
 offer both patterns. The preview shows direct and indirect focus volume for the actual
 week. Substitution still uses reviewed movement families and actual muscle credits.

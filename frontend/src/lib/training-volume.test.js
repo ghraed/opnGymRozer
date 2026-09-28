@@ -34,6 +34,26 @@ describe('weekly workload accounting and personalization', () => {
       }
     }
   })
+  it('balances the two-day beginner focus without losing weekly muscle coverage', () => {
+    const novice = { ...profile, days: 2, experience: 'beginner', programId: 'full_body', sessionMinutes: 60 }
+    const male = buildOnboardingProgram(novice)
+    const female = buildOnboardingProgram({ ...novice, sex: 'female' })
+    expect(male.status).not.toBe('NO_FEASIBLE_PLAN')
+    expect(muscle(male, 'shoulders')).toMatchObject({ target: 6 })
+    expect(muscle(male, 'shoulders').total).toBeLessThanOrEqual(9)
+    expect(male.evidence.missingMuscles).toEqual([])
+    expect(female.evidence.missingMuscles).toEqual([])
+    expect(muscle(female, 'glutes').direct).toBeGreaterThan(muscle(male, 'glutes').direct)
+    const maleEntries = male.routines.flatMap(routine => routine.ex)
+    expect(maleEntries.some(entry => entry.mainLift && (entry.muscles.back === 1 || entry.muscles.shoulders === 1))).toBe(true)
+    expect(maleEntries.some(entry => !entry.mainLift && (entry.muscles.back === 1 || entry.muscles.shoulders === 1))).toBe(true)
+    for (const plan of [male, female]) {
+      expect(plan.routines.every(routine => routine.estimatedMinutes <= 60)).toBe(true)
+      expect(plan.evidence.overshootScore).toBeCloseTo(plan.evidence.weeklyVolume.reduce((sum, row) =>
+        sum + 2 * (Math.max(0, row.total - row.target) / row.target) ** 2, 0))
+    }
+  })
+
   it('counts direct and half-credit indirect work on every scheduled occurrence', () => {
     const routines = [{ id: 'push', ex: [
       { sets: 3, muscles: { chest: 1, triceps: 0.5 } },

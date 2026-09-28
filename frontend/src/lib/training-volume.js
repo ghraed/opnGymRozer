@@ -6,6 +6,13 @@ import { physiqueFocusFor } from './physique-focus.js'
 // Product requirement: no exercise-specific four-set rule has been adopted.
 export const WORKING_SETS = 3
 
+// A soft planning cost for estimated sets beyond a starting target. Squaring
+// the relative excess allows useful overlap while making large excess costly.
+function overshootPenalty(total, target) {
+  const excess = Math.max(0, total - target) / target
+  return 2 * excess * excess
+}
+
 export const MUSCLES = {
   chest: 'Chest', back: 'Back', quads: 'Quadriceps', hamstrings: 'Hamstrings',
   glutes: 'Glutes', shoulders: 'Shoulders', biceps: 'Biceps', triceps: 'Triceps',
@@ -100,48 +107,64 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   // overlap (for example, lateral raises versus overhead pressing).
   const coveredMovements = new Set()
   const directlyFocused = entry => limits.physiqueFocus.muscles.some(muscle => entry.muscles?.[muscle] === 1)
-  // Reserve a focus compound and an isolation movement on suitable days before
-  // the general workload search fills the rest. A reservation is skipped whenever
-  // it would exceed the same time or per-session caps as any other exercise.
-  if (limits.physiqueFocus.muscles.length) for (const routine of resistance) {
-    const focused = routine.ex.filter(directlyFocused)
-    const mains = focused.filter(entry => entry.mainLift)
-    if (limits.physiqueFocus.id === 'feminine') mains.sort((a, b) => Number(b.muscles?.glutes === 1) - Number(a.muscles?.glutes === 1))
-    const main = mains.find(entry => canSelect(routine, entry))
-    if (main) { main.sets = WORKING_SETS; coveredMovements.add(main.movement) }
-    const preferredAccessory = limits.physiqueFocus.id === 'feminine' ? 'Hip extension'
-      : ['Pull', 'Back'].includes(routine.exerciseFilter?.label) ? 'Upper-back accessory' : 'Rear shoulder / upper back'
-    const accessories = focused.filter(entry => !entry.mainLift)
-      .sort((a, b) => Number(b.movement === preferredAccessory) - Number(a.movement === preferredAccessory))
-    const accessory = accessories.find(entry => canSelect(routine, entry))
-    if (accessory) { accessory.sets = WORKING_SETS; coveredMovements.add(accessory.movement) }
-  }
   let volume = countWeeklyVolume(routines, week)
+  const candidateScore = (routine, entry, baseGain = 0) => {
+    const occurrences = frequency[routine.id]
+    let gain = baseGain, excessCost = 0
+    for (const [muscle, credit] of Object.entries(entry.muscles)) {
+      const current = volume[muscle].total
+      const added = WORKING_SETS * credit * occurrences
+      gain += Math.min(Math.max(0, limits.targets[muscle] - current), added) / limits.targets[muscle] * limits.priorities[muscle]
+      excessCost += overshootPenalty(current + added, limits.targets[muscle]) - overshootPenalty(current, limits.targets[muscle])
+    }
+    if (!coveredMovements.has(entry.movement)) gain += 0.5
+    if (!routine.ex.some(e => e.mode !== 'cardio' && e.sets > 0)) gain += 0.5
+    const before = estimateSessionMinutes(routine)
+    entry.sets = WORKING_SETS
+    const cost = Math.max(0.5, estimateSessionMinutes(routine) - before) * occurrences
+    entry.sets = 0
+    return (gain - excessCost) / cost
+  }
+  // Protect at most one focus compound and one distinct accessory across the
+  // actual week. Both must earn a positive score after their full weekly overlap.
+  if (limits.physiqueFocus.muscles.length) {
+    const reserve = mainLift => {
+      let best = null, bestScore = 0, bestPreference = -1
+      for (const routine of resistance) for (const entry of routine.ex) {
+        if (entry.mainLift !== mainLift || !directlyFocused(entry) || !canSelect(routine, entry)) continue
+        const score = candidateScore(routine, entry)
+        const preferredAccessory = limits.physiqueFocus.id === 'feminine' ? 'Hip extension'
+          : ['Pull', 'Back'].includes(routine.exerciseFilter?.label) ? 'Upper-back accessory' : 'Rear shoulder / upper back'
+        const preference = mainLift ? Number(limits.physiqueFocus.id === 'feminine' && entry.muscles?.glutes === 1)
+          : Number(entry.movement === preferredAccessory)
+        if (score > 0 && (preference > bestPreference || (preference === bestPreference && score > bestScore + 1e-9))) {
+          best = entry; bestScore = score; bestPreference = preference
+        }
+      }
+      if (best) {
+        best.sets = WORKING_SETS
+        coveredMovements.add(best.movement)
+        volume = countWeeklyVolume(routines, week)
+      }
+    }
+    reserve(true)
+    reserve(false)
+  }
   for (;;) {
     let best = null, bestScore = 0
-    // Fill the shortest feasible strength session first so early weekly
-    // volume gains cannot leave a later visit half empty.
-    const selectable = balancedStrength ? resistance.filter(routine => routine.ex.some(entry => entry.mode !== 'cardio' && canSelect(routine, entry))) : resistance
-    const shortest = balancedStrength && selectable.length ? Math.min(...selectable.map(exerciseCount)) : 0
+    // Fill the shortest strength session with a beneficial option first. A
+    // feasible but non-beneficial option must not block other sessions.
+    const candidates = []
     for (const routine of resistance) for (const entry of routine.ex) {
-      if (entry.mode === 'cardio' || (balancedStrength && exerciseCount(routine) !== shortest) || !canSelect(routine, entry)) continue
-      const occurrences = frequency[routine.id]
-      let gain = 0
-      for (const [muscle, credit] of Object.entries(entry.muscles)) {
-        const deficit = Math.max(0, limits.targets[muscle] - volume[muscle].total)
-        gain += Math.min(deficit, WORKING_SETS * credit * occurrences) / limits.targets[muscle] * limits.priorities[muscle]
-      }
-      if (!coveredMovements.has(entry.movement)) gain += 0.5
-      if (!routine.ex.some(e => e.mode !== 'cardio' && e.sets > 0)) gain += 0.5
-      const before = estimateSessionMinutes(routine)
-      entry.sets = WORKING_SETS
-      const cost = Math.max(0.5, estimateSessionMinutes(routine) - before) * occurrences
-      entry.sets = 0
-      // A strength visit still needs useful practice after the weekly muscle
-      // targets are met. The small base gain fills distinct
-      // movements without overriding equipment, time or muscle caps.
-      const score = (gain + (balancedStrength ? 1 : 0)) / cost
-      if (score > bestScore + 1e-9) { best = entry; bestScore = score }
+      if (entry.mode === 'cardio' || !canSelect(routine, entry)) continue
+      // Strength practice has value beyond the estimated muscle set target.
+      const score = candidateScore(routine, entry, balancedStrength ? 3 : 0)
+      if (score > 0) candidates.push({ routine, entry, score })
+    }
+    const shortest = balancedStrength && candidates.length ? Math.min(...candidates.map(({ routine }) => exerciseCount(routine))) : 0
+    for (const candidate of candidates) {
+      if (balancedStrength && exerciseCount(candidate.routine) !== shortest) continue
+      if (candidate.score > bestScore + 1e-9) { best = candidate.entry; bestScore = candidate.score }
     }
     if (!best) break
     best.sets = WORKING_SETS
@@ -190,5 +213,6 @@ export function allocateWeeklySets(routines, week, profile = {}) {
     volumeShortfalls: weeklyVolume.filter(m => m.shortfall > 0),
     missingMuscles: weeklyVolume.filter(m => m.total === 0).map(m => m.label),
     workloadScore: weeklyVolume.reduce((sum, m) => sum + m.shortfall / m.target * limits.priorities[m.muscle], 0),
+    overshootScore: weeklyVolume.reduce((sum, m) => sum + overshootPenalty(m.total, m.target), 0),
   }
 }

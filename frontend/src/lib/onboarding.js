@@ -309,7 +309,7 @@ export function selectFeasiblePlan(candidates, profile = {}, rankingCandidates =
     const ranking = rankingById.get(plan.programId) || plan
     return {
       programId: plan.programId,
-      score: ranking.evidence.workloadScore + (plan.programId === preferred ? 0 : 0.4)
+      score: ranking.evidence.workloadScore + (ranking.evidence.overshootScore ?? 0) + (plan.programId === preferred ? 0 : 0.4)
         + (novice && plan.evidence.resistanceDays > 3 ? 1.5 : 0),
       shortfall: ranking.evidence.workloadScore,
     }

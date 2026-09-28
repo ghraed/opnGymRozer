@@ -45,8 +45,10 @@ it('keeps the same split while making direct focus work distinct in every standa
     expect(direct(female, 'glutes')).toBeGreaterThan(direct(male, 'glutes'))
     expect(direct(female, 'quads') + direct(female, 'hamstrings'))
       .toBeGreaterThanOrEqual(direct(male, 'quads') + direct(male, 'hamstrings'))
-    expect(direct(male, 'back')).toBeGreaterThan(direct(female, 'back'))
-    expect(direct(male, 'shoulders')).toBeGreaterThan(direct(female, 'shoulders'))
+    expect(direct(male, 'back')).toBeGreaterThanOrEqual(direct(female, 'back'))
+    expect(direct(male, 'shoulders')).toBeGreaterThanOrEqual(direct(female, 'shoulders'))
+    expect(direct(male, 'back') + direct(male, 'shoulders'))
+      .toBeGreaterThan(direct(female, 'back') + direct(female, 'shoulders'))
     expect(female.evidence.missingMuscles).toEqual([])
     expect(male.evidence.missingMuscles).toEqual([])
   }
