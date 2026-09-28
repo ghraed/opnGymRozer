@@ -151,6 +151,43 @@ describe('research-informed onboarding recommendations', () => {
     }
   }, 30000)
 
+  it('keeps three-day strength visits equally full with profile-specific work', () => {
+    for (const sex of ['female', 'male', 'unspecified']) for (const sessionMinutes of [60, 75, 90]) {
+      const plan = buildOnboardingProgram({ days: 3, programId: 'full_body', goal: 'strength',
+        experience: 'intermediate', equipment: 'full_gym', sex, sessionMinutes })
+      expect(plan.status).not.toBe('NO_FEASIBLE_PLAN')
+      const sessions = lifting(plan)
+      expect(sessions.map(routine => routine.ex.length)).toEqual([7, 7, 7])
+      for (const routine of sessions) {
+        expect(routine.estimatedMinutes).toBeLessThanOrEqual(sessionMinutes)
+        expect(new Set(routine.ex.map(entry => entry.id)).size).toBe(7)
+      }
+      if (sex === 'female') {
+        expect(sessions.flatMap(routine => routine.ex).some(entry => entry.movement === 'Hip extension')).toBe(true)
+        expect(sessions.flatMap(routine => routine.ex).some(entry => entry.muscles.hamstrings === 1)).toBe(true)
+        expect(sessions.flatMap(routine => routine.ex).some(entry => entry.muscles.core === 1)).toBe(true)
+      }
+      if (sex === 'male') {
+        expect(sessions.flatMap(routine => routine.ex).some(entry => entry.movement === 'Vertical pull')).toBe(true)
+        expect(sessions.flatMap(routine => routine.ex).some(entry => entry.muscles.shoulders === 1)).toBe(true)
+      }
+    }
+  })
+
+  it('keeps other 60-minute strength splits close in exercise count', () => {
+    for (const sex of ['female', 'male', 'unspecified']) {
+      for (const [programId, days] of [['upper_lower', 4], ['ppl', 6]]) {
+        const plan = buildOnboardingProgram({ days, programId, goal: 'strength',
+          experience: 'intermediate', equipment: 'full_gym', sex, sessionMinutes: 60 })
+        expect(plan.status).not.toBe('NO_FEASIBLE_PLAN')
+        const counts = lifting(plan).map(routine => routine.ex.length)
+        expect(Math.min(...counts)).toBeGreaterThanOrEqual(5)
+        expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1)
+        expect(Math.max(...counts)).toBeLessThanOrEqual(7)
+      }
+    }
+  })
+
   it('leaves recovery days between full-body lifting, including across week boundaries', () => {
     for (let days = 2; days <= 6; days++) {
       const plan = buildOnboardingProgram({ days, programId: 'full_body', goal: 'strength', experience: 'intermediate' })

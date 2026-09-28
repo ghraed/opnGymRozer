@@ -82,9 +82,12 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   const limits = trainingConstraints(profile)
   const frequency = Object.fromEntries(routines.map(r => [r.id, Object.values(week).filter(id => id === r.id).length]))
   const resistance = routines.filter(r => r.program !== 'cardio')
+  const balancedStrength = profile.goal === 'strength' && resistance.length > 1
+  const strengthExerciseLimit = resistance.every(routine => routine.program === 'ppl') ? 6 : 7
+  const exerciseCount = routine => routine.ex.filter(entry => entry.mode !== 'cardio' && entry.sets > 0).length
   resistance.forEach(r => r.ex.forEach(e => { if (e.mode !== 'cardio') e.sets = 0 }))
   const canSelect = (routine, entry) => {
-    if (entry.sets || !frequency[routine.id]) return false
+    if (entry.sets || !frequency[routine.id] || (balancedStrength && exerciseCount(routine) >= strengthExerciseLimit)) return false
     entry.sets = WORKING_SETS
     const timeFits = estimateSessionMinutes(routine) <= limits.sessionMinutes
     const muscleFits = Object.keys(entry.muscles).every(m => routine.ex.reduce((sum, e) => sum + (e.muscles?.[m] || 0) * e.sets, 0) <= limits.maxMuscleSessionSets)
@@ -116,8 +119,12 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   let volume = countWeeklyVolume(routines, week)
   for (;;) {
     let best = null, bestScore = 0
+    // Fill the shortest feasible strength session first so early weekly
+    // volume gains cannot leave a later visit half empty.
+    const selectable = balancedStrength ? resistance.filter(routine => routine.ex.some(entry => entry.mode !== 'cardio' && canSelect(routine, entry))) : resistance
+    const shortest = balancedStrength && selectable.length ? Math.min(...selectable.map(exerciseCount)) : 0
     for (const routine of resistance) for (const entry of routine.ex) {
-      if (entry.mode === 'cardio' || !canSelect(routine, entry)) continue
+      if (entry.mode === 'cardio' || (balancedStrength && exerciseCount(routine) !== shortest) || !canSelect(routine, entry)) continue
       const occurrences = frequency[routine.id]
       let gain = 0
       for (const [muscle, credit] of Object.entries(entry.muscles)) {
@@ -130,7 +137,10 @@ export function allocateWeeklySets(routines, week, profile = {}) {
       entry.sets = WORKING_SETS
       const cost = Math.max(0.5, estimateSessionMinutes(routine) - before) * occurrences
       entry.sets = 0
-      const score = gain / cost
+      // A strength visit still needs useful practice after the weekly muscle
+      // targets are met. The small base gain fills distinct
+      // movements without overriding equipment, time or muscle caps.
+      const score = (gain + (balancedStrength ? 1 : 0)) / cost
       if (score > bestScore + 1e-9) { best = entry; bestScore = score }
     }
     if (!best) break

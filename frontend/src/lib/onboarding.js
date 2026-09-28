@@ -95,6 +95,7 @@ function adaptRoutine(routine, profile) {
   const upperDay = /^(Upper body|Full body|Push|Pull|Back|Shoulders)$|^(Upper |Full Body|Strength [ABC])/.test(day)
   const candidates = focus.id === 'feminine' && lowerDay && (has('glutes') || has('quads') || has('hamstrings'))
     ? [profile.goal === 'fitness' || profile.goal === 'lose_weight' ? '3013' : '1409', '0410', '0585', '0586']
+    : focus.id === 'feminine' && profile.goal === 'strength' && day === 'Pull' ? ['0095']
     : focus.id === 'v_shape' && upperDay
       ? day === 'Push' ? ['0334']
         : day === 'Pull' || day === 'Back' ? ['2330', '0383', '0095']
