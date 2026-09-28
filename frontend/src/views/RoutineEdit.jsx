@@ -2,7 +2,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useStore } from '../store/useStore.js'
 import { exOr } from '../lib/exercises.js'
-import { replacementConfig, replacementFilter } from '../lib/exercise-actions.js'
+import { replacementConfig } from '../lib/exercise-actions.js'
 import { uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import { supersetUnits, cleanupSg, exLine, modeOf, dropCount } from '../lib/history.js'
@@ -45,7 +45,7 @@ export default function RoutineEdit() {
       exConfigSheet(ex, replacementConfig(original, ex.id), cfg => edit(entries => {
         entries[i] = { ...cfg, id: ex.id, sg: entries[i].sg }
       }), null, r)
-    }, { filter: replacementFilter(exOr(original.id)), title: t('Replace exercise') })
+    }, { muscleFilters: true, title: t('Replace exercise') })
   }
   const remove = i => confirmSheet({
     title: t('Remove exercise?'), message: t('Remove “{0}” from this plan?', exOr(r.ex[i].id).n),

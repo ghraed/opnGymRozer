@@ -11,7 +11,7 @@ import { api } from '../lib/api.js'
 import Media from '../components/Media.jsx'
 import { startFlow, exercisePicker, exConfigSheet, exerciseDetailSheet, topWeightSheet, finishWorkout, workoutCompleteSheet, confirmSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
-import { replacementConfig, replacementFilter, replaceActiveEntry } from '../lib/exercise-actions.js'
+import { replacementConfig, replaceActiveEntry } from '../lib/exercise-actions.js'
 import { Button, Check, NumberField, SelectRow } from '../components/ui.jsx'
 import { nextPrescription, applyPrescription } from '../lib/progression.js'
 import { glyphOf } from '../lib/glyphs.js'
@@ -216,7 +216,7 @@ function ActiveWorkout() {
           replaceActiveEntry(s.active, idx, { id: ex.id, target: full, sets: addPlannedDrops(buildSets(s, full), full) })
         }, true)
       }, null, S.routines.find(r => r.id === A.routineId))
-    }, { filter: replacementFilter(exOr(entry.id)), title: t('Replace exercise') })
+    }, { muscleFilters: true, title: t('Replace exercise') })
   }
   const removeExercise = idx => confirmSheet({
     title: t('Remove exercise?'),

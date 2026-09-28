@@ -508,7 +508,7 @@ function usageMap(st) {
   st.workouts.forEach(w => w.entries.forEach(e => { u[e.id] = (u[e.id] || 0) + 1 }))
   return u
 }
-function ExercisePicker({ onPick, close, filter, title }) {
+function ExercisePicker({ onPick, close, filter, title, muscleFilters = false }) {
   const st = useStore(s => s.S)
   const usage = usageMap(st)
   const [q, setQ] = useState('')
@@ -520,7 +520,7 @@ function ExercisePicker({ onPick, close, filter, title }) {
   const all = allExercises(st)
   const scope = expanded ? all : all.filter(e => exerciseMatchesFilter(e, filter))
   let base = scope.filter(e =>
-    (bp === '★' ? usage[e.id] : (!bp || e.bp === bp)) &&
+    (bp === '★' ? usage[e.id] : (!bp || (muscleFilters ? e.tg : e.bp) === bp)) &&
     (!ql || e.n.toLowerCase().includes(ql) || e.tg.includes(ql) || e.eq.includes(ql) || (e.desc || '').toLowerCase().includes(ql)))
   if (bp === '★') base = [...base].sort((a, b) => (usage[b.id] - usage[a.id]) || (a.n < b.n ? -1 : 1))
   const eqOpts = equipmentOf(base)
@@ -528,16 +528,18 @@ function ExercisePicker({ onPick, close, filter, title }) {
   const eqOn = eqOpts.includes(eq) ? eq : ''
   const f = eqOn ? base.filter(e => e.eq === eqOn) : base
   const chosenCount = scope.filter(e => usage[e.id]).length
-  const bodyParts = BODYPARTS.filter(part => scope.some(e => e.bp === part))
+  const bodyParts = muscleFilters
+    ? [...new Set(scope.map(e => e.tg).filter(Boolean))].sort()
+    : BODYPARTS.filter(part => scope.some(e => e.bp === part))
   return <>
     <h3>{title || t('Add exercise')}</h3>
     {filter && !expanded && <div className="small muted" style={{ marginBottom: 10 }}>{t('Showing exercises related to {0}.', t(filter.label))}</div>}
     <div className="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></svg>
       <input className="input" placeholder={t('Search {0} exercises…', scope.length)} value={q} onChange={e => { setQ(e.target.value); setShown(50) }} /></div>
     <div className="chips" style={{ margin: eqOpts.length > 1 ? '10px 0 6px' : '10px 0' }}>
-      {chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
+      {!muscleFilters && chosenCount > 0 && <button className={'chip' + (bp === '★' ? ' on' : '')} onClick={() => { setBp('★'); setEq(''); setShown(50) }}><Icon name="starFill" style={{ fontSize: 12, display: 'inline-block', marginRight: 4, verticalAlign: '-1px' }} />{t('Chosen')} ({chosenCount})</button>}
       <button className={'chip nocap' + (!bp ? ' on' : '')} onClick={() => { setBp(''); setEq(''); setShown(50) }}>{t('All')}</button>
-      {bodyParts.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(50) }}>{t(b)}</button>)}
+      {bodyParts.map(b => <button key={b} className={'chip' + (bp === b ? ' on' : '')} onClick={() => { setBp(b); setEq(''); setShown(50) }}>{t(muscleFilters && b === 'delts' ? 'shoulders' : b)}</button>)}
     </div>
     {eqOpts.length > 1 && <div className="chips" style={{ marginBottom: 10 }}>
       <button className={'chip nocap' + (!eqOn ? ' on' : '')} onClick={() => { setEq(''); setShown(50) }}>{t('Any equipment')}</button>
@@ -558,7 +560,7 @@ function ExercisePicker({ onPick, close, filter, title }) {
     {filter && !expanded && <><div style={{ height: 8 }} /><Button variant="tinted" icon="plus" onClick={() => { setExpanded(true); setBp(''); setEq(''); setShown(50) }}>{t('Expand to all exercises')}</Button></>}
   </>
 }
-export const exercisePicker = (onPick, options = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} filter={options.filter} title={options.title} />)
+export const exercisePicker = (onPick, options = {}) => ui().openSheet(close => <ExercisePicker onPick={onPick} close={close} filter={options.filter} title={options.title} muscleFilters={options.muscleFilters} />)
 
 /* ============================ exercise config ============================ */
 // Progression settings for one exercise (issue #17). Shown inside the config sheet because
