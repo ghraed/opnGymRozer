@@ -52,6 +52,13 @@ Object.assign(SOURCE_FAMILY, { '0120': 'shoulderAccessory', '1411': 'forearms', 
 
 export const movementFor = id => MOVEMENTS[SOURCE_FAMILY[id]]
 
+export const STRENGTH_PATTERNS = {
+  squat: { label: 'Squat', families: ['squat'] },
+  hinge: { label: 'Hip hinge', families: ['hinge'] },
+  press: { label: 'Press', families: ['press', 'overhead'] },
+  pull: { label: 'Pull', families: ['row', 'pull'] },
+}
+
 // Credit follows the exercise ACTUALLY selected, not the family it substitutes
 // for. Direct=1 and indirect=0.5 is the fractional model tested by Pelland et al.
 // The classification of each movement is an explicit programming assumption.
@@ -93,6 +100,49 @@ const EXERCISE_BY_ID = Object.fromEntries(EXDB.map(exercise => [exercise.id, exe
 const UNILATERAL_IDS = new Set(['0410', '3470'])
 const HIGH_SETUP_IDS = new Set(['0043', '0032', '1409'])
 
+function availableCandidates(movement, profile) {
+  const equipment = profile.equipment || 'full_gym'
+  const beginner = !profile.experience || profile.experience === 'beginner' || profile.recovery === 'limited'
+  let candidates = equipment === 'bodyweight' ? movement.bodyweight
+    : equipment === 'dumbbells' ? movement.dumbbells
+      : beginner && movement.novice.length ? movement.novice : movement.full
+  if (beginner && equipment === 'bodyweight') candidates = candidates.filter(id => !['0652', '1326', '1771'].includes(id))
+  if (equipment !== 'full_gym') {
+    if (profile.hasBench !== true) candidates = candidates.filter(id => !BENCH_IDS.has(id) && id !== '0493')
+    if (profile.hasPullStation !== true) candidates = candidates.filter(id => !STATION_IDS.has(id))
+  }
+  return candidates
+}
+
+export function strengthLiftOptions(profile = {}) {
+  return Object.fromEntries(Object.entries(STRENGTH_PATTERNS).map(([pattern, spec]) => {
+    const seen = new Set(), options = []
+    for (const familyKey of spec.families) for (const id of availableCandidates(MOVEMENTS[familyKey], profile)) {
+      if (!CREDITS[id]?.compound || seen.has(id)) continue
+      seen.add(id)
+      options.push({ id, familyKey })
+    }
+    return [pattern, options]
+  }))
+}
+
+export function strengthLiftsFor(profile = {}) {
+  const options = strengthLiftOptions(profile)
+  if (profile.strengthLifts && typeof profile.strengthLifts === 'object') {
+    return Object.fromEntries(Object.keys(STRENGTH_PATTERNS).map(pattern => [pattern, profile.strengthLifts[pattern] || null]))
+  }
+  return Object.fromEntries(Object.entries(options).map(([pattern, choices]) => [pattern, choices[0]?.id || null]))
+}
+
+export function selectStrengthLift(pattern, id, profile = {}) {
+  const option = strengthLiftOptions(profile)[pattern]?.find(choice => choice.id === id)
+  if (!option) return null
+  const movement = MOVEMENTS[option.familyKey]
+  return { id, movement: VARIANT_LABELS[id] || movementFor(id)?.label || movement.label,
+    sourceIds: movement.sourceIds, muscles: { ...CREDITS[id].muscles },
+    mainLift: true, compound: true, ...timingForMovement(id), strengthLiftPattern: pattern }
+}
+
 // Timing follows the selected variant, since substitution can change its setup
 // and whether every prescribed rep is performed on each side.
 export function timingForMovement(id) {
@@ -105,16 +155,8 @@ export function timingForMovement(id) {
 export function selectMovement(entry, profile, used) {
   const movement = movementFor(entry.id)
   if (!movement) return null // Never substitute from an unreviewed catalogue entry.
-  const equipment = profile.equipment || 'full_gym'
   const beginner = !profile.experience || profile.experience === 'beginner' || profile.recovery === 'limited'
-  let candidates = equipment === 'bodyweight' ? movement.bodyweight
-    : equipment === 'dumbbells' ? movement.dumbbells
-      : beginner && movement.novice.length ? movement.novice : movement.full
-  if (beginner && equipment === 'bodyweight') candidates = candidates.filter(id => !['0652', '1326', '1771'].includes(id))
-  if (equipment !== 'full_gym') {
-    if (profile.hasBench !== true) candidates = candidates.filter(id => !BENCH_IDS.has(id) && id !== '0493')
-    if (profile.hasPullStation !== true) candidates = candidates.filter(id => !STATION_IDS.has(id))
-  }
+  let candidates = availableCandidates(movement, profile)
   // Retain a template's variation for experienced clients when it is permitted.
   if (!beginner && candidates.includes(entry.id)) candidates = [entry.id, ...candidates]
   const id = candidates.find(candidate => !used.has(candidate) && CREDITS[candidate])

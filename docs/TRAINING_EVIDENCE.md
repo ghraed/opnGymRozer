@@ -1,6 +1,6 @@
 # Training recommendation evidence
 
-Reviewed 27 September 2026; policy version `2026-09-27-v6`.
+Reviewed 28 September 2026; policy version `2026-09-28-v9`.
 
 Setup step 3, the fitness profile editor, and installing a starter program for a completed
 profile use the same planner. All four splits are evaluated against the profile before the
@@ -14,7 +14,8 @@ individual recommendations.
 
 | Information | Effect and limits |
 | --- | --- |
-| Goal | Changes weekly set budgets, repetitions, effort, progression style and aerobic work. Strength prioritizes loaded compound practice; muscle building uses higher weekly budgets. No split promises weight loss. |
+| Goal | Changes weekly set budgets, repetitions, effort, progression style and aerobic work. Strength reserves chosen compound lift practice; muscle building uses higher weekly budgets. No split promises weight loss. |
+| Strength lifts | Strength profiles choose one reviewed squat, hinge, press and pull exercise. Equipment- and experience-compatible suggestions fill profiles without saved choices. An explicit choice that becomes unavailable requires a new selection. |
 | Available days | Determines scheduled days and repeated sessions. Full body has up to 3 lifting days, upper/lower 4, PPL 3 or 6, bro split 5. Extra days contain aerobic activity. These are scheduling conventions, not biological cutoffs. |
 | Experience | Beginners receive moderate repetitions, simpler loaded variants, smaller weekly budgets and a preference for fewer lifting days. |
 | Recovery | Returning after a break / limited recovery uses the conservative prescription and smaller exercise selection, even for experienced clients. This is self-reported readiness, not a medical assessment. |
@@ -63,6 +64,15 @@ requirement. The planner never reduces a selected exercise to 1–2 sets or incr
 4–5. No exercise-specific study requiring a fourth set has been adopted; a future exception
 would need an explicit evidence review. Three sets is the required default, not a claim
 that research establishes a universal minimum or optimal prescription.
+
+For strength plans, the four chosen exercise IDs are assigned to pattern-compatible
+sessions before physique or general allocation. The planner searches feasible placements
+under the same time, per-session muscle, and exercise-count caps. Each chosen lift must
+appear at least once; it aims for two weekly sessions, counting repeated routine
+occurrences. If a split or time limit allows only one, the preview reports that
+practice shortfall as a soft tradeoff. A chosen lift cannot be removed by coverage
+repair, and unavailable saved choices block applying a strength plan. Among valid
+strength splits, fewer practice shortfalls rank ahead of estimated muscle workload.
 
 Allocation selects complete three-set exercises to reduce combined normalized weekly
 muscle deficits per estimated minute. It also gives a preference to distinct movement

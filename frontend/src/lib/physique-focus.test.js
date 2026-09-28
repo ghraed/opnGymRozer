@@ -61,9 +61,17 @@ it('keeps sex-based emphasis across goals and ranks automatic splits without sex
       const profile = { ...base, goal, programId, days }
       const female = buildOnboardingProgram({ ...profile, sex: 'female' })
       const male = buildOnboardingProgram({ ...profile, sex: 'male' })
-      expect(direct(female, 'glutes')).toBeGreaterThan(direct(male, 'glutes'))
-      expect(direct(male, 'back') + direct(male, 'shoulders'))
-        .toBeGreaterThan(direct(female, 'back') + direct(female, 'shoulders'))
+      // Chosen strength lifts are protected before physique accessories, so
+      // matching anchor practice can use the available time in both plans.
+      if (goal === 'strength') {
+        expect(direct(female, 'glutes')).toBeGreaterThanOrEqual(direct(male, 'glutes'))
+        expect(direct(male, 'back') + direct(male, 'shoulders'))
+          .toBeGreaterThanOrEqual(direct(female, 'back') + direct(female, 'shoulders'))
+      } else {
+        expect(direct(female, 'glutes')).toBeGreaterThan(direct(male, 'glutes'))
+        expect(direct(male, 'back') + direct(male, 'shoulders'))
+          .toBeGreaterThan(direct(female, 'back') + direct(female, 'shoulders'))
+      }
       if (['lose_weight', 'fitness'].includes(goal)) {
         expect(female.evidence.cardioMinutes).toBe(male.evidence.cardioMinutes)
         expect(female.routines.flatMap(routine => routine.ex).filter(entry => entry.mode === 'cardio')

@@ -5,6 +5,7 @@ import { programById } from '../lib/starter.js'
 import { selectablePrograms } from '../lib/onboarding.js'
 import { GOAL_GUIDANCE, SEX_OPTIONS, TRAINING_SOURCES } from '../lib/training-evidence.js'
 import { MUSCLES } from '../lib/training-volume.js'
+import { STRENGTH_PATTERNS } from '../lib/training-movements.js'
 import { Button } from './ui.jsx'
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -59,9 +60,18 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
 
     <div className="setup-plan-overview" aria-live="polite" aria-atomic="true">
       <h3>{t(plan.name)}</h3>
-      <p className="small muted" role="status">{t(plan.status === 'VALID_PLAN_WITH_SOFT_TRADEOFFS' ? 'Feasible plan with some starting workload targets below budget.' : 'Feasible plan within the selected hard limits.')}</p>
+      <p className="small muted" role="status">{t(plan.status === 'VALID_PLAN_WITH_SOFT_TRADEOFFS'
+        ? plan.evidence.strengthPractice?.some(practice => practice.shortfall) ? 'Feasible plan with fewer than two practice sessions for some chosen lifts.' : 'Feasible plan with some starting workload targets below budget.'
+        : 'Feasible plan within the selected hard limits.')}</p>
       <p className="accent"><strong>{t(focus.label)}</strong></p>
       <p>{t(focus.description)}</p>
+      {plan.evidence.strengthPractice?.length > 0 && <div className="setup-volume-grid" aria-label={t('Chosen lift practice')}>
+        {plan.evidence.strengthPractice.map(practice => <div className="setup-volume-item" key={practice.pattern}>
+          <div><strong>{t(STRENGTH_PATTERNS[practice.pattern].label)}</strong><span>{t('{0} / {1} sessions', practice.sessions, practice.target)}</span></div>
+          <p className="capitalize">{t(exerciseFor(practice.id)?.n || practice.id)}</p>
+          {practice.shortfall > 0 && <small>{t('This split or session limit fits fewer than two practice sessions.')}</small>}
+        </div>)}
+      </div>}
       {focusVolume.length > 0 && <div aria-label={t(focus.label)} className="setup-volume-grid">
         {focusVolume.map(muscle => <div className="setup-volume-item" key={muscle.muscle}>
           <div><strong>{t(muscle.label)}</strong><span>{t('{0} / {1} sets', muscle.total, muscle.target)}</span></div>
@@ -123,6 +133,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
           {entry.mode !== 'cardio' && <details className="setup-exercise-reason">
             <summary>{t('Why these sets and reps?')}</summary>
             <p>{t('{0} sets × {1} sessions = {2} weekly sets of this exercise. Every selected resistance exercise keeps 3 working sets. Weekly workload, movement coverage, time, and recovery guide which exercises are included.', entry.sets, entry.weeklyOccurrences, entry.weeklySets)}</p>
+            {entry.strengthLiftPattern && <p>{t('You chose this as your primary {0} lift. It receives practice time before physique accessories.', t(STRENGTH_PATTERNS[entry.strengthLiftPattern].label).toLowerCase())}</p>}
             {entry.volumeReason.map(muscle => <p key={muscle.muscle}>{t('{0} across the week: {1} direct + {2} indirect = {3} sets; starting budget {4}.', t(MUSCLES[muscle.muscle]), muscle.direct, muscle.indirect, muscle.total, muscle.target)}</p>)}
             <p>{t(entry.heavy ? 'The lower repetition range prioritizes heavier strength practice on this compound movement.' : entry.compound ? 'This moderate repetition range provides controlled practice on a compound movement.' : 'This accessory uses moderate to higher repetitions to add targeted work. The exact range is a practical choice; several ranges can build muscle.')}</p>
             <p>{t('Use a controllable load or variation and stop with about {0}–{1} good repetitions still possible. No maximum-weight test is required.', entry.effort.minRir, entry.effort.maxRir)}</p>

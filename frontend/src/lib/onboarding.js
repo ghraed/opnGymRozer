@@ -1,6 +1,6 @@
 import { buildProgram, programById, PROGRAMS } from './starter.js'
 import { todayISO, uid } from './format.js'
-import { movementFor, selectMovement, EXTRA_EXERCISES } from './training-movements.js'
+import { movementFor, selectMovement, selectStrengthLift, strengthLiftOptions, strengthLiftsFor, STRENGTH_PATTERNS, EXTRA_EXERCISES } from './training-movements.js'
 import { TRAINING_POLICY_VERSION, TRAINING_SOURCES } from './training-evidence.js'
 import { allocateWeeklySets, countWeeklyVolume, estimateSessionMinutes, trainingConstraints, MUSCLES } from './training-volume.js'
 import { physiqueFocusFor } from './physique-focus.js'
@@ -163,9 +163,38 @@ function fitSplitToAvailableDays(routines, profile, recommendation) {
     }
     return {
       ...sources[0], id: uid(), name: `${splitName} ${groupIndex + 1}`,
-      exerciseFilter: undefined, ex: selected.sort((a, b) => Number(b.compound) - Number(a.compound)),
+      exerciseFilter: undefined,
+      strengthPatterns: [...new Set(sources.flatMap(source => source.strengthPatterns || []))],
+      ex: selected.sort((a, b) => Number(b.compound) - Number(a.compound)),
     }
   })
+}
+
+function strengthPatternsFor(routine, programId) {
+  if (programId === 'full_body') return Object.keys(STRENGTH_PATTERNS)
+  const day = routine.exerciseFilter?.label || routine.name
+  if (programId === 'upper_lower') return day.startsWith('Upper') ? ['press', 'pull'] : ['squat', 'hinge']
+  if (programId === 'ppl') return day === 'Push' ? ['press'] : day === 'Pull' ? ['pull'] : ['squat', 'hinge']
+  return day === 'Chest' || day === 'Shoulders' ? ['press']
+    : day === 'Back' ? ['pull'] : day === 'Legs' ? ['squat', 'hinge'] : []
+}
+
+function addStrengthLiftCandidates(routines, profile) {
+  for (const routine of routines) {
+    for (const pattern of routine.strengthPatterns || []) {
+      const id = profile.strengthLifts[pattern]
+      const existing = routine.ex.find(entry => entry.id === id)
+      if (existing) {
+        existing.strengthLiftPattern = pattern
+      } else {
+        const entry = selectStrengthLift(pattern, id, profile)
+        if (entry) routine.ex.push(applyPrescription(entry, profile))
+      }
+    }
+    routine.ex.sort((a, b) => Number(!!b.strengthLiftPattern) - Number(!!a.strengthLiftPattern)
+      || Number(b.mainLift) - Number(a.mainLift))
+  }
+  return routines
 }
 
 function buildSelectedRoutines(profile, recommendation) {
@@ -180,7 +209,12 @@ function buildSelectedRoutines(profile, recommendation) {
     const count = recommendation.programId === 'full_body' && recommendation.days === 2 ? 2 : built.routines.length
     routines = built.routines.slice(0, count).map(routine => adaptRoutine(routine, profile))
   }
+  if (profile.goal === 'strength') {
+    routines = routines.map(routine => ({ ...routine,
+      strengthPatterns: strengthPatternsFor(routine, recommendation.programId) }))
+  }
   routines = fitSplitToAvailableDays(routines, profile, recommendation)
+  if (profile.goal === 'strength') routines = addStrengthLiftCandidates(routines, profile)
   if (profile.goal === 'lose_weight' || profile.goal === 'fitness') {
     const desiredMinutes = !profile.experience || profile.experience === 'beginner' || profile.recovery === 'limited' ? 10 : profile.goal === 'lose_weight' ? 30 : 20
     const minutes = Math.min(desiredMinutes, Math.floor(trainingConstraints(profile).sessionMinutes / 4))
@@ -235,6 +269,7 @@ function buildCandidate(profile, programId) {
         equipment: profile.equipment || 'full_gym', sessionMinutes: workload.sessionMinutes, recovery: workload.recovery,
         weight: Number(profile.currentWeight) || null, height: Number(profile.height) || null, unit: profile.unit || 'kg',
         hasBench: profile.hasBench === true, hasPullStation: profile.hasPullStation === true,
+        strengthLifts: profile.goal === 'strength' ? { ...profile.strengthLifts } : null,
         sex: profile.sex || null,
       },
       policyVersion: TRAINING_POLICY_VERSION,
@@ -289,6 +324,15 @@ export function validatePlanCandidate(plan, profile = {}) {
       }
     }
   }
+  if (profile.goal === 'strength') {
+    for (const [pattern, id] of Object.entries(strengthLiftsFor(profile))) {
+      if (!scheduled.some(routineId => plan.routines.find(routine => routine.id === routineId)?.ex
+        .some(entry => entry.id === id && entry.strengthLiftPattern === pattern))) {
+        reasons.push({ code: 'MISSING_STRENGTH_LIFT', pattern,
+          message: `${STRENGTH_PATTERNS[pattern].label} needs at least one practice session. Choose another split or allow more session time.` })
+      }
+    }
+  }
   const weeklyVolume = countWeeklyVolume(plan.routines, plan.week)
   const missingMuscles = Object.keys(MUSCLES).filter(muscle => weeklyVolume[muscle].total <= 0)
   if (missingMuscles.length) reasons.push({ code: 'MISSING_MUSCLE_COVERAGE', muscles: missingMuscles,
@@ -311,9 +355,10 @@ export function selectFeasiblePlan(candidates, profile = {}, rankingCandidates =
       programId: plan.programId,
       score: ranking.evidence.workloadScore + (ranking.evidence.overshootScore ?? 0) + (plan.programId === preferred ? 0 : 0.4)
         + (novice && plan.evidence.resistanceDays > 3 ? 1.5 : 0),
+      practiceShortfall: plan.evidence.strengthPractice?.reduce((sum, practice) => sum + practice.shortfall, 0) || 0,
       shortfall: ranking.evidence.workloadScore,
     }
-  }).sort((a, b) => a.score - b.score)
+  }).sort((a, b) => a.practiceShortfall - b.practiceShortfall || a.score - b.score)
   const recommendedProgramId = scores[0]?.programId || null
   const explicitlySelected = profile.selectedSplitSource !== 'recommended' && selectablePrograms().includes(profile.programId)
   const programId = explicitlySelected ? profile.programId : recommendedProgramId
@@ -326,7 +371,8 @@ export function selectFeasiblePlan(candidates, profile = {}, rankingCandidates =
     if (!blockingReasons.length) blockingReasons.push({ code: 'NO_VALID_SPLIT', message: 'No reviewed split can produce a complete plan within the selected constraints.' })
     return { status: 'NO_FEASIBLE_PLAN', programId, selectedSplitSource, recommendedProgramId, alternatives: scores, blockingReasons }
   }
-  return { ...selected, status: selected.evidence.volumeShortfalls.length ? 'VALID_PLAN_WITH_SOFT_TRADEOFFS' : 'VALID_PLAN',
+  return { ...selected, status: selected.evidence.volumeShortfalls.length || selected.evidence.strengthPractice?.some(practice => practice.shortfall)
+    ? 'VALID_PLAN_WITH_SOFT_TRADEOFFS' : 'VALID_PLAN',
     selectedSplitSource, recommendedProgramId, alternatives: scores, blockingReasons: [] }
 }
 
@@ -340,14 +386,26 @@ export function buildOnboardingProgram(profile = {}) {
     invalid.push({ code: 'EQUIPMENT_UNAVAILABLE', message: 'Choose supported available equipment.' })
   if (profile.programId && profile.selectedSplitSource !== 'recommended' && !selectablePrograms().includes(profile.programId))
     invalid.push({ code: 'INVALID_SPLIT', message: 'The selected training split is unavailable.' })
+  let resolvedProfile = profile
+  if (profile.goal === 'strength') {
+    const strengthLifts = strengthLiftsFor(profile)
+    const options = strengthLiftOptions(profile)
+    for (const [pattern, spec] of Object.entries(STRENGTH_PATTERNS)) {
+      if (!options[pattern].some(choice => choice.id === strengthLifts[pattern])) {
+        invalid.push({ code: 'STRENGTH_LIFT_UNAVAILABLE', pattern,
+          message: `Choose an available ${spec.label.toLowerCase()} exercise for your equipment and experience.` })
+      }
+    }
+    resolvedProfile = { ...profile, strengthLifts }
+  }
   if (invalid.length) return { status: 'NO_FEASIBLE_PLAN', programId: profile.programId || null,
     selectedSplitSource: profile.programId && profile.selectedSplitSource !== 'recommended' ? 'user' : 'recommended', recommendedProgramId: null,
     alternatives: [], blockingReasons: invalid }
   const ids = selectablePrograms()
-  const candidates = ids.map(id => buildCandidate(profile, id))
+  const candidates = ids.map(id => buildCandidate(resolvedProfile, id))
   const rankingCandidates = ['male', 'female'].includes(profile.sex)
-    ? ids.map(id => buildCandidate({ ...profile, sex: 'unspecified' }, id)) : candidates
-  return selectFeasiblePlan(candidates, profile, rankingCandidates)
+    ? ids.map(id => buildCandidate({ ...resolvedProfile, sex: 'unspecified' }, id)) : candidates
+  return selectFeasiblePlan(candidates, resolvedProfile, rankingCandidates)
 }
 
 export function recommendationFor(profile = {}) {
@@ -367,7 +425,9 @@ export function applyOnboarding(state, profile = {}, now = Date.now(), { preserv
   // Persist the resolved recommendation as the selected program. Fresh onboarding profiles
   // intentionally omit programId until the user either accepts the recommendation or chooses
   // another split.
-  state.onboarding = { ...profile, programId: preservePlan ? state.onboarding?.programId || null : plan.programId, selectedSplitSource: preservePlan ? state.onboarding?.selectedSplitSource || 'user' : plan.selectedSplitSource, currentWeight, height, targetWeight, completedAt: now, trainingPolicyVersion: preservePlan ? state.onboarding?.trainingPolicyVersion || null : TRAINING_POLICY_VERSION }
+  state.onboarding = { ...profile,
+    ...(profile.goal === 'strength' && plan.evidence?.strengthLifts ? { strengthLifts: { ...plan.evidence.strengthLifts } } : {}),
+    programId: preservePlan ? state.onboarding?.programId || null : plan.programId, selectedSplitSource: preservePlan ? state.onboarding?.selectedSplitSource || 'user' : plan.selectedSplitSource, currentWeight, height, targetWeight, completedAt: now, trainingPolicyVersion: preservePlan ? state.onboarding?.trainingPolicyVersion || null : TRAINING_POLICY_VERSION }
   if (!preservePlan) state.onboarding.trainingAssessment = plan.evidence
   else if (previousAssessment) state.onboarding.trainingAssessment = previousAssessment
   if (profile.body === 'male' || profile.body === 'female') state.body = profile.body
@@ -405,5 +465,6 @@ export function applyPersonalizedProgram(state, plan) {
   state.onboarding.selectedSplitSource = 'user'
   state.onboarding.trainingPolicyVersion = plan.evidence.policyVersion
   state.onboarding.trainingAssessment = plan.evidence
+  if (plan.evidence.strengthLifts) state.onboarding.strengthLifts = { ...plan.evidence.strengthLifts }
   return true
 }

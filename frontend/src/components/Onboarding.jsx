@@ -7,6 +7,7 @@ import { buildOnboardingProgram, applyOnboarding, EQUIPMENT, EXPERIENCES, GOALS 
 import Icon from './Icon.jsx'
 import ProgramRecommendation from './ProgramRecommendation.jsx'
 import TrainingConstraints from './TrainingConstraints.jsx'
+import StrengthLiftChoices from './StrengthLiftChoices.jsx'
 import { SEX_OPTIONS } from '../lib/training-evidence.js'
 import { Button, NumberField, Segmented, TextArea } from './ui.jsx'
 
@@ -37,6 +38,7 @@ export default function Onboarding({ close, allowSkip = true }) {
     experience: previous.experience || 'beginner', equipment: previous.equipment || 'full_gym',
     sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
     hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
+    strengthLifts: previous.strengthLifts,
     sex: previous.sex || null, body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
   })
   const [confirmReplace, setConfirmReplace] = useState(false)
@@ -104,6 +106,7 @@ export default function Onboarding({ close, allowSkip = true }) {
       <h4 className="sec">{t('Available equipment')}</h4>
       <ChoiceList options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
       <TrainingConstraints profile={profile} onChange={set} />
+      <StrengthLiftChoices profile={profile} onChange={set} />
       <h4 className="sec">{t('Sex (optional)')}</h4>
       <ChoiceList options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
           <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>

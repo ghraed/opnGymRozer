@@ -11,6 +11,9 @@ import Icon from '../components/Icon.jsx'
 import ProfilePhoto from '../components/ProfilePhoto.jsx'
 import ProgramRecommendation from '../components/ProgramRecommendation.jsx'
 import TrainingConstraints from '../components/TrainingConstraints.jsx'
+import StrengthLiftChoices from '../components/StrengthLiftChoices.jsx'
+import { EXIDX } from '../lib/exercises.js'
+import { EXTRA_EXERCISES, strengthLiftsFor, STRENGTH_PATTERNS } from '../lib/training-movements.js'
 import { SEX_OPTIONS } from '../lib/training-evidence.js'
 
 const titles = ['Your body and goals', 'Your training preferences', 'Review your profile']
@@ -39,6 +42,7 @@ export default function ProfileSetup() {
       sex: previous.sex || null, programId: null,
       sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
       hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
+      strengthLifts: previous.strengthLifts,
       profileImage: st.profileImage || null, body: previous.body || 'none', injuryNote: previous.injuryNote || '', ...draft,
     }
   })
@@ -120,6 +124,7 @@ export default function ProfileSetup() {
           <h2 className="setup-section-title">{t('Available equipment')}</h2>
           <Choices options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
           <TrainingConstraints profile={profile} onChange={set} />
+          <StrengthLiftChoices profile={profile} onChange={set} />
           <h2 className="setup-section-title">{t('Sex (optional)')}</h2>
           <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
           <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
@@ -128,6 +133,12 @@ export default function ProfileSetup() {
           <section className="card"><h2>{t('Your profile')}</h2><dl className="setup-summary">
             {[[t('Goal'),labelFor(GOALS,profile.goal)],[t('Current weight ({0})',st.unit),profile.currentWeight],[t('Height (cm)'),profile.height],...(profile.goal === 'lose_weight' ? [[t('Target weight ({0})',st.unit),profile.targetWeight]] : []),[t('Days per week'),profile.days],[t('Time per session'),t('{0} minutes',profile.sessionMinutes)],[t('Current recovery'),t(profile.recovery === 'limited' ? 'Limited / returning' : 'Recovering well')],[t('Training experience'),labelFor(EXPERIENCES,profile.experience)],[t('Available equipment'),labelFor(EQUIPMENT,profile.equipment)],[t('Sex'),profile.sex ? labelFor(SEX_OPTIONS,profile.sex) : t('Not provided')]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
           </dl>
+          {profile.goal === 'strength' && <><h3 className="setup-section-title">{t('Lifts you want to improve')}</h3>
+            <dl className="setup-summary">{Object.entries(STRENGTH_PATTERNS).map(([pattern, spec]) => {
+              const id = strengthLiftsFor(profile)[pattern]
+              const name = EXIDX[id]?.n || EXTRA_EXERCISES.find(exercise => exercise.id === id)?.n || t('Unavailable')
+              return <div key={pattern}><dt>{t(spec.label)}</dt><dd>{t(name)}</dd></div>
+            })}</dl></>}
             <h3 className="setup-section-title">{t('Sex (optional)')}</h3>
             <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
           <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>

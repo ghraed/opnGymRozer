@@ -1,6 +1,6 @@
 // Sources reviewed 2026-09-17. These support programming principles, not clinical
 // approval of this app, a named split, or a particular generated exercise list.
-export const TRAINING_POLICY_VERSION = '2026-09-28-v8'
+export const TRAINING_POLICY_VERSION = '2026-09-28-v9'
 export const TRAINING_SOURCES = [
   { id: 'glutes2023', title: 'Plotkin et al.: hip thrust and squat training (2023)', url: 'https://pubmed.ncbi.nlm.nih.gov/37877099/',
     finding: 'Both exercises increased gluteal size similarly in untrained participants; squats produced more thigh growth. Floor bridges are a practical variation, not the exact intervention tested.' },
@@ -33,7 +33,7 @@ export const SEX_OPTIONS = [
 ]
 
 export const GOAL_GUIDANCE = {
-  strength: 'Practice loaded compound lifts in a lower repetition range when experienced. Beginners and returning lifters start with moderate repetitions and more effort in reserve. Each selected resistance exercise uses three working sets; available time and weekly workload guide exercise selection.',
+  strength: 'Choose a squat, hinge, press, and pull to practice. The planner reserves those lifts before accessory work and aims for two weekly sessions per lift. Beginners and returning lifters use moderate repetitions; experienced lifters can use a lower range. Every selected resistance exercise uses three working sets.',
   muscle: 'Distribute weekly work across compound and isolation exercises. The starting budget is lower for beginners and limited recovery; trained clients build around roughly 10 weekly sets per muscle and adjust to progress.',
   lose_weight: 'Combine resistance training with moderate aerobic activity. Exercise supports health and weight management; a particular split does not guarantee weight loss.',
   fitness: 'Train major muscle groups and include moderate aerobic activity. Begin with manageable sets and build consistency before adding more work.',

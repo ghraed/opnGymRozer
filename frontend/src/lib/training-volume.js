@@ -93,8 +93,12 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   const strengthExerciseLimit = resistance.every(routine => routine.program === 'ppl') ? 6 : 7
   const exerciseCount = routine => routine.ex.filter(entry => entry.mode !== 'cardio' && entry.sets > 0).length
   resistance.forEach(r => r.ex.forEach(e => { if (e.mode !== 'cardio') e.sets = 0 }))
+  const practiceSessions = pattern => resistance.reduce((sum, routine) =>
+    sum + (routine.ex.some(entry => entry.strengthLiftPattern === pattern && entry.sets > 0) ? frequency[routine.id] : 0), 0)
   const canSelect = (routine, entry) => {
     if (entry.sets || !frequency[routine.id] || (balancedStrength && exerciseCount(routine) >= strengthExerciseLimit)) return false
+    if (profile.goal === 'strength' && entry.strengthLiftPattern &&
+      practiceSessions(entry.strengthLiftPattern) + frequency[routine.id] > 2) return false
     entry.sets = WORKING_SETS
     const timeFits = estimateSessionMinutes(routine) <= limits.sessionMinutes
     const muscleFits = Object.keys(entry.muscles).every(m => routine.ex.reduce((sum, e) => sum + (e.muscles?.[m] || 0) * e.sets, 0) <= limits.maxMuscleSessionSets)
@@ -124,6 +128,96 @@ export function allocateWeeklySets(routines, week, profile = {}) {
     const cost = Math.max(0.5, estimateSessionMinutes(routine) - before) * occurrences
     entry.sets = 0
     return (gain - excessCost) / cost
+  }
+  // Search the small set of pattern-compatible sessions before spending time on
+  // physique or general volume. A repeated routine counts every scheduled visit.
+  if (profile.goal === 'strength') {
+    const patterns = ['squat', 'hinge', 'press', 'pull']
+    const choices = patterns.map(pattern => {
+      const entries = resistance.flatMap(routine => routine.ex
+        .filter(entry => entry.strengthLiftPattern === pattern && frequency[routine.id])
+        .map(entry => ({ routine, entry, sessions: frequency[routine.id] })))
+      return [[], ...entries.map(choice => [choice]),
+        ...entries.flatMap((first, index) => entries.slice(index + 1)
+          .filter(second => first.sessions + second.sessions <= 2)
+          .map(second => [first, second]))]
+        .sort((a, b) => b.reduce((sum, choice) => sum + choice.sessions, 0) -
+          a.reduce((sum, choice) => sum + choice.sessions, 0))
+    })
+    let best = null
+    const chosen = []
+    const fillMissingCoverage = () => {
+      const added = []
+      for (;;) {
+        const current = countWeeklyVolume(routines, week)
+        const missing = Object.keys(MUSCLES).filter(muscle => current[muscle].total <= 0)
+        if (!missing.length) break
+        let choice = null, bestScore = 0
+        for (const routine of resistance) for (const entry of routine.ex) {
+          if (entry.mode === 'cardio' || !canSelect(routine, entry)) continue
+          const gain = missing.filter(muscle => entry.muscles?.[muscle] > 0).length
+          if (!gain) continue
+          const before = estimateSessionMinutes(routine)
+          entry.sets = WORKING_SETS
+          const minutes = estimateSessionMinutes(routine) - before
+          entry.sets = 0
+          const score = gain / Math.max(0.5, minutes)
+          if (score > bestScore) { choice = entry; bestScore = score }
+        }
+        if (!choice) break
+        choice.sets = WORKING_SETS
+        added.push(choice)
+      }
+      return added
+    }
+    const search = index => {
+      if (best?.covered === patterns.length) {
+        const covered = patterns.slice(0, index).filter(pattern => practiceSessions(pattern) > 0).length
+        if (covered + patterns.length - index < best.covered) return
+        if (best.muscles === Object.keys(MUSCLES).length) {
+          const sessions = patterns.slice(0, index).reduce((sum, pattern) => sum + Math.min(2, practiceSessions(pattern)), 0)
+          if (sessions + 2 * (patterns.length - index) < best.sessions) return
+        }
+      }
+      if (index === patterns.length) {
+        const coverageEntries = fillMissingCoverage()
+        const coverage = countWeeklyVolume(routines, week)
+        const counts = resistance.map(exerciseCount)
+        const result = {
+          entries: [...chosen, ...coverageEntries],
+          covered: patterns.filter(pattern => practiceSessions(pattern) > 0).length,
+          sessions: patterns.reduce((sum, pattern) => sum + Math.min(2, practiceSessions(pattern)), 0),
+          muscles: Object.values(coverage).filter(muscle => muscle.total > 0).length,
+          imbalance: Math.max(...counts) - Math.min(...counts),
+          minutes: resistance.reduce((sum, routine) => sum + estimateSessionMinutes(routine) * frequency[routine.id], 0),
+        }
+        const rank = candidate => [candidate.covered, candidate.muscles, candidate.sessions,
+          -candidate.imbalance, -candidate.minutes]
+        const currentRank = rank(result), bestRank = best && rank(best)
+        if (!best || currentRank.some((value, position) => value > bestRank[position] &&
+          currentRank.slice(0, position).every((earlier, earlierPosition) => earlier === bestRank[earlierPosition]))) best = result
+        for (const entry of coverageEntries) entry.sets = 0
+        return
+      }
+      for (const option of choices[index]) {
+        const added = []
+        for (const choice of option) {
+          if (!canSelect(choice.routine, choice.entry)) break
+          choice.entry.sets = WORKING_SETS
+          added.push(choice)
+          chosen.push(choice.entry)
+        }
+        if (added.length === option.length) search(index + 1)
+        for (const choice of added) choice.entry.sets = 0
+        chosen.length -= added.length
+      }
+    }
+    search(0)
+    for (const entry of best?.entries || []) {
+      entry.sets = WORKING_SETS
+      coveredMovements.add(entry.movement)
+    }
+    volume = countWeeklyVolume(routines, week)
   }
   // Protect at most one focus compound and one distinct accessory across the
   // actual week. Both must earn a positive score after their full weekly overlap.
@@ -180,7 +274,7 @@ export function allocateWeeklySets(routines, week, profile = {}) {
     for (const routine of resistance) {
       if (repaired) break
       for (const candidate of routine.ex.filter(entry => !entry.sets && entry.muscles?.[muscle] === 1)) {
-        const replaceable = routine.ex.filter(entry => entry.mode !== 'cardio' && entry.sets)
+        const replaceable = routine.ex.filter(entry => entry.mode !== 'cardio' && entry.sets && !entry.strengthLiftPattern)
           .sort((a, b) => Number(directlyFocused(a)) - Number(directlyFocused(b)) || Number(a.mainLift) - Number(b.mainLift))
         for (const replaced of replaceable) {
           replaced.sets = 0
@@ -209,7 +303,13 @@ export function allocateWeeklySets(routines, week, profile = {}) {
   }
   const weeklyVolume = Object.entries(volume).map(([muscle, values]) => ({ muscle, label: MUSCLES[muscle], ...values,
     target: limits.targets[muscle], shortfall: Math.max(0, limits.targets[muscle] - values.total) }))
-  return { ...limits, weeklyVolume,
+  const strengthPractice = profile.goal === 'strength' ? Object.entries(profile.strengthLifts).map(([pattern, id]) => {
+    const sessions = routines.reduce((sum, routine) =>
+      sum + (routine.ex.some(entry => entry.strengthLiftPattern === pattern && entry.id === id) ? frequency[routine.id] : 0), 0)
+    return { pattern, id, sessions, target: 2, shortfall: Math.max(0, 2 - sessions) }
+  }) : []
+  return { ...limits, weeklyVolume, strengthLifts: profile.goal === 'strength' ? { ...profile.strengthLifts } : null,
+    strengthPractice,
     volumeShortfalls: weeklyVolume.filter(m => m.shortfall > 0),
     missingMuscles: weeklyVolume.filter(m => m.total === 0).map(m => m.label),
     workloadScore: weeklyVolume.reduce((sum, m) => sum + m.shortfall / m.target * limits.priorities[m.muscle], 0),
