@@ -70,7 +70,18 @@ export default function Admin() {
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const pendingCount = (users || []).filter(u => needsActivation(u) && !u.disabled).length
-  const visibleUsers = (users || []).filter(u => u.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+  const visibleUsers = (users || [])
+    .filter(u => u.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    .sort((a, b) => {
+      const aPending = needsActivation(a) && !a.disabled
+      const bPending = needsActivation(b) && !b.disabled
+      if (aPending !== bPending) return aPending ? -1 : 1
+      if (aPending) {
+        const newestFirst = (Date.parse(b.created) || 0) - (Date.parse(a.created) || 0)
+        if (newestFirst) return newestFirst
+      }
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    })
 
   return <div className="narrow">
     <div className="hdr admin-hdr">
