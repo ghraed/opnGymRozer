@@ -9,7 +9,9 @@ import ProgramRecommendation from './ProgramRecommendation.jsx'
 import TrainingConstraints from './TrainingConstraints.jsx'
 import StrengthLiftChoices from './StrengthLiftChoices.jsx'
 import { SEX_OPTIONS } from '../lib/training-evidence.js'
-import { Button, NumberField, Segmented, TextArea } from './ui.jsx'
+import { Button, NumberField, TextArea } from './ui.jsx'
+import TrainingDays from './TrainingDays.jsx'
+import { trainingStepError } from '../lib/profile.js'
 
 const targetGoal = goal => goal === 'lose_weight'
 
@@ -27,7 +29,7 @@ export default function Onboarding({ close, allowSkip = true }) {
   const [step, setStep] = useState(0)
   const previous = st.onboarding || {}
   const latestWeight = st.bodyweight[st.bodyweight.length - 1]?.w || null
-  const initialDays = previous.days || 3
+  const initialDays = previous.days || null
   // Always start from the live recommendation. A split only becomes user-chosen
   // after an explicit button click on the recommendation step.
   const initialProgramId = null
@@ -35,8 +37,8 @@ export default function Onboarding({ close, allowSkip = true }) {
     goal: previous.goal === 'gain_weight' ? 'muscle' : previous.goal || 'muscle', currentWeight: previous.currentWeight || latestWeight || null,
     height: previous.height || null,
     targetWeight: previous.targetWeight || st.targetW || null, days: initialDays, programId: initialProgramId,
-    experience: previous.experience || 'beginner', equipment: previous.equipment || 'full_gym',
-    sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
+    experience: previous.experience || '', equipment: previous.equipment || '',
+    sessionMinutes: previous.sessionMinutes || null, recovery: previous.recovery || '',
     hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
     strengthLifts: previous.strengthLifts,
     sex: previous.sex || null, body: previous.body || st.body || 'male', injuryNote: previous.injuryNote || '',
@@ -64,9 +66,11 @@ export default function Onboarding({ close, allowSkip = true }) {
       toast(t('Enter a target weight below your current weight'))
       return
     }
+    if (step === 1 && trainingStepError(profile)) { toast(t(trainingStepError(profile))); return }
     setStep(value => Math.min(2, value + 1))
   }
   const apply = () => {
+    if (trainingStepError(profile)) { setStep(1); toast(t(trainingStepError(profile))); return }
     if (plan.status === 'NO_FEASIBLE_PLAN') { toast(t('Choose a feasible program or adjust your training constraints.')); return }
     update(s => { applyOnboarding(s, { ...profileForPlan, unit: st.unit }) })
     close()
@@ -98,16 +102,14 @@ export default function Onboarding({ close, allowSkip = true }) {
       </label>}
     </>}
     {step === 1 && <>
-      <h4 className="sec">{t('How often can you train?')}</h4>
-      <Segmented options={[2, 3, 4, 5, 6].map(value => ({ value, label: String(value) }))} value={profile.days} onChange={days => set({ days })} />
-      <p className="small muted">{t('{0} days per week', profile.days)}</p>
+      <TrainingDays value={profile.days} onChange={days => set({ days })} />
       <h4 className="sec">{t('Training experience')}</h4>
       <ChoiceList options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
       <h4 className="sec">{t('Available equipment')}</h4>
       <ChoiceList options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
       <TrainingConstraints profile={profile} onChange={set} />
-      <StrengthLiftChoices profile={profile} onChange={set} />
-      <h4 className="sec">{t('Sex (optional)')}</h4>
+      <StrengthLiftChoices profile={profile} onChange={set} requireSelection />
+      <h4 className="sec">{t('Sex')}</h4>
       <ChoiceList options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
           <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
     </>}
@@ -124,10 +126,11 @@ export default function Onboarding({ close, allowSkip = true }) {
         <div style={{ height: 10 }} /><Button variant="danger" onClick={apply} disabled={plan.status === 'NO_FEASIBLE_PLAN'}>{t('Confirm and apply plan')}</Button>
       </div>}
     </>}
+    {step === 1 && trainingStepError(profile) && <p className="small muted" aria-live="polite">{t(trainingStepError(profile))}</p>}
     <div style={{ height: 16 }} />
     <div className="row onboarding-actions" style={{ gap: 8 }}>
       {step > 0 && <Button className="onboarding-back" onClick={() => setStep(value => value - 1)}>{t('Back')}</Button>}
-      {step < 2 ? <Button variant="primary" onClick={next} style={{ flex: 1 }}>{t('Next')}</Button>
+      {step < 2 ? <Button variant="primary" disabled={step === 1 && !!trainingStepError(profile)} onClick={next} style={{ flex: 1 }}>{t('Next')}</Button>
         : !confirmReplace && <Button variant="primary" onClick={hasExistingSchedule ? () => setConfirmReplace(true) : apply} disabled={plan.status === 'NO_FEASIBLE_PLAN'} style={{ flex: 1 }}>{t('Apply my plan')}</Button>}
     </div>
     {allowSkip && step < 2 && <><div style={{ height: 8 }} /><Button variant="ghost" className="onboarding-skip" onClick={skip}>{t('Skip for now')}</Button></>}

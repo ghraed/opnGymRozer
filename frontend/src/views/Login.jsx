@@ -5,7 +5,7 @@ import { t } from '../lib/i18n.js'
 import { needsActivation } from '../lib/activation.js'
 import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
-import { Button, Check } from '../components/ui.jsx'
+import { Button } from '../components/ui.jsx'
 import { onboardingSheet } from '../sheets.jsx'
 
 function RegisterSheet({ close }) {
@@ -13,8 +13,9 @@ function RegisterSheet({ close }) {
   const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [code, setCode] = useState(''), [inviteOnly, setInviteOnly] = useState(false), [busy, setBusy] = useState(false)
   const ref = useRef(null)
   useEffect(() => { setTimeout(() => ref.current?.focus(), 250) }, [])
-  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => {}) }, [])
+  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => { }) }, [])
   const go = async () => {
+    if (busy) return
     if (!name.trim() || !email.trim() || !password) return useUI.getState().toast(t('Complete all fields'))
     if (inviteOnly && !code.trim()) return useUI.getState().toast(t('An invite code is required'))
     setBusy(true)
@@ -27,41 +28,66 @@ function RegisterSheet({ close }) {
       if (u.admin) onboardingSheet()
     } catch (e) { useUI.getState().toast(e.message || t('Registration failed')) } finally { setBusy(false) }
   }
-  return <div className="auth-gold">
+  return <div className="auth-gold auth-register">
     <img className="register-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
     <h3>{t('Create your account')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Use your email and a password of at least 8 characters.')}</div>
-    <input ref={ref} className="input" placeholder={t('Your name')} maxLength={40} value={name} onChange={e => setName(e.target.value)} />
-    <div style={{ height: 10 }} /><input className="input" type="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
-    <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="new-password" placeholder={t('Password (at least 8 characters)')} value={password} onChange={e => setPassword(e.target.value)} />
-    {inviteOnly && <><div style={{ height: 10 }} /><input className="input" placeholder={t('Invite code')} maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} /></>}
-    <div style={{ height: 12 }} /><Button variant="primary" onClick={go} disabled={busy}>{busy ? t('Creating account…') : t('Create account')}</Button>
+    <p className="small registration-setup-note">{t('During profile setup, you can upload a profile photo and choose your training days per week.')}</p>
+    <form className="auth-form" onSubmit={event => { event.preventDefault(); go() }}>
+      <label className="auth-field">{t('Your name')}<input ref={ref} className="input" name="name" autoComplete="name" placeholder={t('Your name')} required maxLength={40} value={name} onChange={e => setName(e.target.value)} disabled={busy} /></label>
+      <label className="auth-field">{t('Email address')}<input className="input" type="email" name="email" autoComplete="email" placeholder="you@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={busy} /></label>
+      <label className="auth-field">{t('Password')}<input className="input" type="password" name="password" autoComplete="new-password" placeholder={t('Password (at least 8 characters)')} required minLength={8} maxLength={200} value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></label>
+      {inviteOnly && <label className="auth-field">{t('Invite code')}<input className="input auth-invite" placeholder={t('Invite code')} required maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} disabled={busy} /></label>}
+      <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Creating account…') : t('Create account')}</Button>
+    </form>
   </div>
 }
 
 export default function Login() {
   const { setUser, pullState, setGuest } = useStore()
   const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [remember, setRemember] = useState(true), [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
   const signIn = async () => {
-    if (!email.trim() || !password) return useUI.getState().toast(t('Enter your email and password'))
+    if (busy) return
+    if (!email.trim() || !password) return setError(t('Enter your email and password'))
+    setError('')
     setBusy(true)
     try { const u = await passwordLogin(email.trim(), password, remember); setUser(u); if (needsActivation(u)) return; await pullState(); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
-    catch (e) { useUI.getState().toast(e.message || t('Sign-in failed')) } finally { setBusy(false) }
+    catch (e) { setError(e.message || t('Sign-in failed')) } finally { setBusy(false) }
   }
   const head = <img className="login-logo" src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
   const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
   if (DEMO) return <div className="narrow auth-gold" style={wrap}>{head}<div className="muted" style={{ marginBottom: 30 }}>{t('Live demo — everything stays in this browser.')}</div><Button variant="primary" icon="sparkles" onClick={() => setGuest(true)}>{t('Start the demo')}</Button></div>
-  return <div className="narrow auth-gold" style={wrap}>
-    {head}<div className="muted" style={{ marginBottom: 24 }}>{t('Your workouts. Your weights. Your profile.')}</div>
-    <input className="input" type="email" name="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
-    <div style={{ height: 10 }} /><input className="input" type="password" name="password" autoComplete="current-password" placeholder={t('Password')} value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && signIn()} />
-    <div className="login-remember">
-      <Check checked={remember} onChange={setRemember} size={24} />
-      <button type="button" onClick={() => setRemember(v => !v)}>{t('Remember me for 90 days')}</button>
+  return <main className="auth-page auth-gold">
+    <div className="auth-layout">
+      <section className="auth-brand" aria-label="ROZER">
+        {head}
+        <div className="auth-brand-copy">
+          <p className="auth-eyebrow">{t('Your training, app.')}</p>
+          <h1>{t('Build a stronger you.')}</h1>
+          <p className="auth-brand-description">{t('Your workouts. Your weights. Your profile.')}</p>
+        </div>
+        <p className="auth-brand-footer">{t('Each profile keeps its own plan, workouts & body weight.')}</p>
+      </section>
+      <section className="auth-panel" aria-labelledby="signin-title">
+        <header className="auth-panel-header">
+          <h2 id="signin-title">{t('Welcome back')}</h2>
+          <p>{t('Sign in to continue your training.')}</p>
+        </header>
+        <form className="auth-form" onSubmit={event => { event.preventDefault(); signIn() }}>
+          <label className="auth-field">{t('Email address')}<input className="input" type="email" name="email" autoComplete="email" placeholder="you@example.com" required value={email} onChange={e => { setEmail(e.target.value); setError('') }} disabled={busy} /></label>
+          <label className="auth-field">{t('Password')}<input className="input" type="password" name="password" autoComplete="current-password" placeholder={t('Enter your password')} required value={password} onChange={e => { setPassword(e.target.value); setError('') }} disabled={busy} /></label>
+          <label className="auth-remember"><input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} disabled={busy} /><span>{t('Remember me for 90 days')}</span></label>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <Button type="submit" className="auth-signin" disabled={busy}>{busy ? t('Signing in…') : t('Sign in')}</Button>
+        </form>
+        <div className="auth-divider"><span>{t('New to ROZER?')}</span></div>
+        <section className="auth-join" aria-labelledby="join-title">
+          <h3 id="join-title">{t('Start your training journey')}</h3>
+          <p>{t('Create your profile and set up a plan that fits you.')}</p>
+          <Button type="button" variant="primary" className="auth-create" disabled={busy} onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create account')}</Button>
+        </section>
+      </section>
     </div>
-    <div style={{ height: 12 }} /><Button variant="primary" icon="person" onClick={signIn} disabled={busy}>{busy ? t('Signing in…') : t('Sign in')}</Button>
-    <div style={{ height: 10 }} /><Button icon="sparkles" onClick={() => useUI.getState().openSheet(close => <RegisterSheet close={close} />)}>{t('Create account')}</Button>
-    <div style={{ height: 10 }} /><Button variant="ghost" className="dim" onClick={() => setGuest(true)}>{t('Continue without account')}</Button>
-    <div className="dim small" style={{ marginTop: 26, lineHeight: 1.5 }}>{t('Each profile keeps its own plan, workouts & body weight.')}</div>
-  </div>
+  </main>
 }

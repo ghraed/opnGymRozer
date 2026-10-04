@@ -82,7 +82,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
       </div>}
       <p>{t('{0} lifting days · {1} aerobic days per week', plan.evidence.resistanceDays, plan.evidence.aerobicDays)}</p>
     </div>
-    <details className="setup-evidence" open>
+    <details className="setup-evidence">
       <summary>{t('Why this recommendation fits')}</summary>
       <p>{t('We compare all four splits using your goal, available days, experience, equipment, session length, and recovery. The recommendation favours a schedule that covers more of your weekly muscle workload within those limits.')}</p>
       <p>{t('Beginners and returning lifters get a preference for fewer lifting days. Full-body sessions have recovery days between them; extra available days can include aerobic activity.')}</p>
@@ -103,7 +103,7 @@ export default function ProgramRecommendation({ profile, plan, unit = 'kg', onCh
       ? 'Bench exercises use the stable bench you selected. Dumbbell rows provide horizontal pulling when a pulldown is unavailable.'
       : 'Dumbbell presses use the floor, and exercises requiring a bench are excluded. Dumbbell rows provide horizontal pulling when a pulldown is unavailable.')}</p>}
 
-    <details className="setup-evidence setup-volume" open>
+    <details className="setup-evidence setup-volume">
       <summary>{t('Weekly muscle workload')}</summary>
       <p>{t('Every selected resistance exercise uses 3 working sets. Exercise selection adapts to your weekly workload and available time. Three sets is the configured default; the cited studies do not establish it as a universal minimum.')}</p>
       <p>{t('Sets are counted across your actual week, including repeated sessions. Direct work counts as 1 set; assistance in another movement counts as 0.5. These are estimates, not measurements of muscle growth.')} {link('volume2026', 'Volume research')}</p>

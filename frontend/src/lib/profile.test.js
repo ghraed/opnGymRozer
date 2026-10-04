@@ -1,9 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { profileComplete, profileStepError } from './profile.js'
+import { profileComplete, profileStepError, trainingStepError } from './profile.js'
+import { strengthLiftOptions } from './training-movements.js'
 import { applyOnboarding } from './onboarding.js'
 
 const valid = { goal: 'muscle', currentWeight: 80, height: 175, days: 3, experience: 'beginner', equipment: 'full_gym', body: 'none', completedAt: 123 }
 describe('required fitness profile', () => {
+  it('requires explicit answers to every training-step question', () => {
+    const answered = { ...valid, sessionMinutes: 60, recovery: 'normal', sex: 'unspecified' }
+    expect(trainingStepError(answered)).toBe('')
+    for (const field of ['days', 'experience', 'equipment', 'sessionMinutes', 'recovery', 'sex']) {
+      for (const value of [undefined, null, '']) {
+        expect(trainingStepError({ ...answered, [field]: value }), field).toBeTruthy()
+      }
+    }
+    expect(trainingStepError({ ...answered, hasBench: false, hasPullStation: false })).toBe('')
+  })
+  it('requires available strength lifts and rejects choices invalidated by equipment changes', () => {
+    const profile = { ...valid, goal: 'strength', sessionMinutes: 60, recovery: 'normal', sex: 'male' }
+    expect(trainingStepError(profile)).toBeTruthy()
+    const strengthLifts = Object.fromEntries(Object.entries(strengthLiftOptions(profile)).map(([pattern, choices]) => [pattern, choices[0]?.id]))
+    expect(trainingStepError({ ...profile, strengthLifts })).toBe('')
+    for (const pattern of Object.keys(strengthLifts)) {
+      expect(trainingStepError({ ...profile, strengthLifts: { ...strengthLifts, [pattern]: null } })).toBeTruthy()
+    }
+    expect(trainingStepError({ ...profile, strengthLifts, equipment: 'dumbbells' })).toBeTruthy()
+  })
   it('requires every step, not just a completed timestamp', () => {
     expect(profileComplete(valid)).toBe(true)
     expect(profileComplete({ completedAt: 123 })).toBe(false)

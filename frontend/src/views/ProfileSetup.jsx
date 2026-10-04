@@ -4,11 +4,12 @@ import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
-import { profileComplete, profileStepError } from '../lib/profile.js'
+import { profileComplete, profileStepError, trainingStepError } from '../lib/profile.js'
 import { applyOnboarding, buildOnboardingProgram, GOALS, EXPERIENCES, EQUIPMENT } from '../lib/onboarding.js'
-import { Button, NumberField, Segmented, TextArea } from '../components/ui.jsx'
+import { Button, NumberField, TextArea } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
-import ProfilePhoto from '../components/ProfilePhoto.jsx'
+import ProfilePhoto, { ProfileAvatar } from '../components/ProfilePhoto.jsx'
+import TrainingDays from '../components/TrainingDays.jsx'
 import ProgramRecommendation from '../components/ProgramRecommendation.jsx'
 import TrainingConstraints from '../components/TrainingConstraints.jsx'
 import StrengthLiftChoices from '../components/StrengthLiftChoices.jsx'
@@ -17,10 +18,41 @@ import { EXTRA_EXERCISES, strengthLiftsFor, STRENGTH_PATTERNS } from '../lib/tra
 import { SEX_OPTIONS } from '../lib/training-evidence.js'
 
 const titles = ['Your body and goals', 'Your training preferences', 'Review your profile']
-function Choices({ options, value, onChange }) {
-  return <div className="list setup-choices">{options.map(option => <button type="button" key={option.value} className="item" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
-    <span className="grow">{t(option.label)}</span>{value === option.value && <Icon name="check" />}
+const intros = [
+  'Tell us where you are now and what you want to achieve. We’ll use these details to shape your starting plan.',
+  'Build a routine around your schedule, experience, and the equipment you have.',
+  'Check your details and explore your recommended plan. You can edit your answers before saving.',
+]
+const choiceDetails = {
+  muscle: ['dumbbell', 'Develop muscle and improve your physique.'],
+  strength: ['barbell', 'Focus on strength in your main lifts.'],
+  lose_weight: ['scale', 'Work toward your target weight.'],
+  fitness: ['figureRun', 'Build a consistent, balanced routine.'],
+  beginner: ['bolt', 'New to training or building a foundation.'],
+  intermediate: ['chart', 'Training regularly with a solid foundation.'],
+  advanced: ['trophy', 'Experienced with structured training.'],
+  full_gym: ['machine', 'Machines, cables, and free weights.'],
+  dumbbells: ['dumbbell', 'Train with the dumbbells you have.'],
+  bodyweight: ['figureStrength', 'Use your body weight for resistance.'],
+}
+function Choices({ options, value, onChange, label }) {
+  return <div className="setup-choices" role="group" aria-label={t(label)}>{options.map(option => <button type="button" key={option.value} className="setup-choice" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
+    {choiceDetails[option.value] && <span className="setup-choice-icon"><Icon name={choiceDetails[option.value][0]} /></span>}
+    <span className="setup-choice-copy"><strong>{t(option.label)}</strong>{choiceDetails[option.value] && <small>{t(choiceDetails[option.value][1])}</small>}</span>
+    <span className="setup-choice-check" aria-hidden="true">{value === option.value && <Icon name="check" />}</span>
   </button>)}</div>
+}
+
+function SetupCard({ title, icon, description, onEdit, children, className = '' }) {
+  return <section className={'card setup-card ' + className}>
+    <header className="setup-card-heading"><span className="setup-card-icon"><Icon name={icon} /></span><div><h2>{t(title)}</h2>{description && <p>{t(description)}</p>}</div>
+      {onEdit && <Button type="button" size="sm" icon="pencil" onClick={onEdit}>{t('Edit')}</Button>}
+    </header>{children}
+  </section>
+}
+
+function Summary({ rows }) {
+  return <dl className="setup-summary">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
 }
 
 export default function ProfileSetup() {
@@ -40,7 +72,7 @@ export default function ProfileSetup() {
       height: previous.height || null, targetWeight: previous.targetWeight || st.targetW || null,
       days: previous.days || null, experience: previous.experience || '', equipment: previous.equipment || '',
       sex: previous.sex || null, programId: null,
-      sessionMinutes: previous.sessionMinutes || 60, recovery: previous.recovery || 'normal',
+      sessionMinutes: previous.sessionMinutes || null, recovery: previous.recovery || '',
       hasBench: previous.hasBench === true, hasPullStation: previous.hasPullStation === true,
       strengthLifts: previous.strengthLifts,
       profileImage: st.profileImage || null, body: previous.body || 'none', injuryNote: previous.injuryNote || '', ...draft,
@@ -65,15 +97,15 @@ export default function ProfileSetup() {
 
   if (!Number.isInteger(step) || step < 0 || step > 2) return <Navigate to="/setup/1" replace />
   for (let previous = 0; previous < step; previous++) {
-    if (profileStepError(profile, previous)) return <Navigate to={'/setup/' + (previous + 1)} replace />
+    if ((previous === 1 ? trainingStepError(profile) : profileStepError(profile, previous))) return <Navigate to={'/setup/' + (previous + 1)} replace />
   }
   const next = () => {
-    const message = profileStepError(profile, step)
+    const message = step === 1 ? trainingStepError(profile) : profileStepError(profile, step)
     if (message) { setError(t(message)); return }
     navigate('/setup/' + (step + 2))
   }
   const save = async () => {
-    const message = profileStepError(profile, 0) || profileStepError(profile, 1) || profileStepError(profile, 2)
+    const message = profileStepError(profile, 0) || trainingStepError(profile) || profileStepError(profile, 2)
     if (message) { setError(t(message)); return }
     if (!preservePlan && recommendation.status === 'NO_FEASIBLE_PLAN') { setError(t('Choose a feasible program or adjust your training constraints.')); return }
     setSaving(true)
@@ -98,71 +130,129 @@ export default function ProfileSetup() {
   const signOut = async () => { await useStore.getState().signOut(); navigate('/home', { replace: true }) }
   const labelFor = (options, value) => t(options.find(option => option.value === value)?.label || value)
 
-  return <main className="profile-setup">
-    <header className="setup-header"><div><p className="small muted">{t('Complete your fitness profile')}</p><p className="small">{t('Step {0} of {1}', step + 1, 3)}</p></div><Button size="sm" disabled={saving} onClick={signOut}>{t('Sign out')}</Button></header>
-    <ol className="setup-progress" aria-label={t('Profile setup progress')}>{titles.map((title, index) => <li key={title} className={index <= step ? 'on' : ''} aria-current={index === step ? 'step' : undefined}><span>{index + 1}</span>{t(['Details', 'Training', 'Review'][index])}</li>)}</ol>
-    <h1 id="setup-title" tabIndex={-1}>{t(titles[step])}</h1>
-    <p className="muted setup-intro">{t('Your account is active. Complete all three steps to unlock your workouts and dashboard.')}</p>
-    <form onSubmit={event => { event.preventDefault(); if (!saving && !photoBusy) step < 2 ? next() : save() }}>
-      <fieldset disabled={saving} className="setup-fields">
-        {step === 0 && <section className="card">
-          <ProfilePhoto value={profile.profileImage} name={user.name} onChange={profileImage => set({ profileImage })} onBusyChange={setPhotoBusy} disabled={saving} />
-          <h2>{t('What is your main goal?')}</h2>
-          <Choices options={GOALS} value={profile.goal} onChange={goal => set({ goal })} />
-          <div className="setup-measurements">
-            <label>{t('Current weight ({0})', st.unit)}<NumberField className="current-weight-input" aria-label={t('Current weight ({0})', st.unit)} value={profile.currentWeight} placeholder="0.0" onChange={currentWeight => set({ currentWeight })} /></label>
-            <label>{t('Height (cm)')}<NumberField className="current-weight-input" aria-label={t('Height (cm)')} value={profile.height} placeholder="0" onChange={height => set({ height })} /></label>
-          </div>
-          {profile.goal === 'lose_weight' && <label className="setup-target">{t('Target weight ({0})', st.unit)}<NumberField className="current-weight-input" aria-label={t('Target weight ({0})', st.unit)} value={profile.targetWeight} placeholder="0.0" onChange={targetWeight => set({ targetWeight })} /></label>}
-        </section>}
-        {step === 1 && <section className="card">
-          <h2>{t('How often can you train?')}</h2>
-          <Segmented options={[2, 3, 4, 5, 6].map(value => ({ value, label: String(value) }))} value={profile.days} onChange={days => set({ days })} />
-          <p className="small muted">{t('Days per week')}</p>
-          <h2 className="setup-section-title">{t('Training experience')}</h2>
-          <Choices options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
-          <h2 className="setup-section-title">{t('Available equipment')}</h2>
-          <Choices options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
-          <TrainingConstraints profile={profile} onChange={set} />
-          <StrengthLiftChoices profile={profile} onChange={set} />
-          <h2 className="setup-section-title">{t('Sex (optional)')}</h2>
-          <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
-          <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
-        </section>}
-        {step === 2 && <>
-          <section className="card"><h2>{t('Your profile')}</h2><dl className="setup-summary">
-            {[[t('Goal'),labelFor(GOALS,profile.goal)],[t('Current weight ({0})',st.unit),profile.currentWeight],[t('Height (cm)'),profile.height],...(profile.goal === 'lose_weight' ? [[t('Target weight ({0})',st.unit),profile.targetWeight]] : []),[t('Days per week'),profile.days],[t('Time per session'),t('{0} minutes',profile.sessionMinutes)],[t('Current recovery'),t(profile.recovery === 'limited' ? 'Limited / returning' : 'Recovering well')],[t('Training experience'),labelFor(EXPERIENCES,profile.experience)],[t('Available equipment'),labelFor(EQUIPMENT,profile.equipment)],[t('Sex'),profile.sex ? labelFor(SEX_OPTIONS,profile.sex) : t('Not provided')]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-          </dl>
-          {profile.goal === 'strength' && <><h3 className="setup-section-title">{t('Lifts you want to improve')}</h3>
-            <dl className="setup-summary">{Object.entries(STRENGTH_PATTERNS).map(([pattern, spec]) => {
-              const id = strengthLiftsFor(profile)[pattern]
-              const name = EXIDX[id]?.n || EXTRA_EXERCISES.find(exercise => exercise.id === id)?.n || t('Unavailable')
-              return <div key={pattern}><dt>{t(spec.label)}</dt><dd>{t(name)}</dd></div>
-            })}</dl></>}
-            <h3 className="setup-section-title">{t('Sex (optional)')}</h3>
-            <Choices options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
-          <p className="small accent" aria-live="polite">{t(physiqueFocusFor(profile).label)} · {t(physiqueFocusFor(profile).description)}</p>
-          </section>
-          <section className="card"><label className="setup-note">{t('Anything we should know?')}<span className="small muted">{t('Optional injury or limitation')}</span><TextArea rows="3" maxLength="300" value={profile.injuryNote} onChange={event => set({ injuryNote:event.target.value })} /></label></section>
-          {hasExistingPlan && <section className="card"><h2>{t('Your current plan')}</h2><p className="small muted">{t('You already have a plan. Keep its schedule, or use the program selected below. Previous routines and workout history stay saved.')}</p>
-            <Choices options={[{value:'keep',label:'Keep my current schedule'},{value:'replace',label:'Use the selected program below'}]} value={replacePlan ? 'replace' : 'keep'} onChange={choice => setReplacePlan(choice === 'replace')} />
-            {preservePlan && <p className="small muted">{t('The program below is a preview. Your current schedule will be kept when you save.')}</p>}
-          </section>}
-          <ProgramRecommendation profile={profile} plan={recommendation} unit={st.unit} onChoose={programId => set({ programId })} />
-        </>}
-      </fieldset>
-      {error && <p className="setup-error" role="alert">{error}</p>}
-      <div className="setup-actions">{step > 0 && <Button type="button" disabled={saving} onClick={() => navigate('/setup/' + step)}>{t('Back')}</Button>}<Button type="submit" variant="primary" disabled={saving || photoBusy || (step === 2 && !preservePlan && recommendation.status === 'NO_FEASIBLE_PLAN')}>{saving ? t('Saving…') : step < 2 ? t('Next') : t('Save profile and continue')}</Button></div>
-    </form>
+  const detailRows = [
+    [t('Goal'), labelFor(GOALS, profile.goal)],
+    [t('Current weight ({0})', st.unit), profile.currentWeight],
+    [t('Height (cm)'), profile.height],
+    ...(profile.goal === 'lose_weight' ? [[t('Target weight ({0})', st.unit), profile.targetWeight]] : []),
+  ]
+  const trainingRows = [
+    [t('Days per week'), t('{0} days per week', profile.days)],
+    [t('Time per session'), t('{0} minutes', profile.sessionMinutes)],
+    [t('Current recovery'), t(profile.recovery === 'limited' ? 'Limited / returning' : 'Recovering well')],
+    [t('Training experience'), labelFor(EXPERIENCES, profile.experience)],
+    [t('Available equipment'), labelFor(EQUIPMENT, profile.equipment)],
+    [t('Sex'), profile.sex ? labelFor(SEX_OPTIONS, profile.sex) : t('Not provided')],
+  ]
+
+  return <main className="profile-setup auth-gold">
+    <header className="setup-header">
+      <div className="setup-brand"><img src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" /><span>{t('Complete your fitness profile')}</span></div>
+      <Button type="button" size="sm" icon="signOut" disabled={saving} onClick={signOut}>{t('Sign out')}</Button>
+    </header>
+    <div className="setup-layout">
+      <aside className="setup-sidebar">
+        <div className="setup-active"><Icon name="checkCircle" />{t('Account activated')}</div>
+        <h2>{t('Your next chapter starts here.')}</h2>
+        <p className="setup-sidebar-intro">{t('Three steps to a plan that fits your life.')}</p>
+        <ol className="setup-progress" aria-label={t('Profile setup progress')}>{titles.map((title, index) => <li key={title} className={index < step ? 'complete' : index === step ? 'current' : ''} aria-current={index === step ? 'step' : undefined}>
+          <button type="button" disabled={index >= step || saving} onClick={() => navigate('/setup/' + (index + 1))}>
+            <span className="setup-step-number">{index < step ? <Icon name="check" /> : index + 1}</span>
+            <span className="setup-step-copy"><strong>{t(['Details', 'Training', 'Review'][index])}</strong><small>{t(title)}</small></span>
+          </button>
+        </li>)}</ol>
+        <div className="setup-sidebar-note"><Icon name="clipboard" /><p>{t('Your answers shape your starting plan. You can update your profile later in Settings.')}</p></div>
+      </aside>
+      <div className="setup-content">
+        <header className="setup-page-heading">
+          <p className="setup-eyebrow">{t('Step {0} of {1}', step + 1, 3)}</p>
+          <h1 id="setup-title" tabIndex={-1}>{t(titles[step])}</h1>
+          <p className="setup-intro">{t(intros[step])}</p>
+        </header>
+        <form onSubmit={event => { event.preventDefault(); if (!saving && !photoBusy) step < 2 ? next() : save() }}>
+          <fieldset disabled={saving} className="setup-fields">
+            {step === 0 && <>
+              <section className="card setup-photo-card" aria-label={t('Profile photo')}>
+                <ProfilePhoto value={profile.profileImage} name={user.name} onChange={profileImage => set({ profileImage })} onBusyChange={setPhotoBusy} disabled={saving} />
+                <p className="small muted">{t('Upload a profile photo here. You can change it later in Settings.')}</p>
+              </section>
+              <SetupCard title="What is your main goal?" icon="target" description="Choose the goal you want your plan to focus on.">
+                <Choices label="What is your main goal?" options={GOALS} value={profile.goal} onChange={goal => set({ goal })} />
+              </SetupCard>
+              <SetupCard title="Your starting point" icon="scale" description="Add your current measurements to track your progress.">
+                <div className="setup-measurements">
+                  <label>{t('Current weight ({0})', st.unit)}<NumberField className="current-weight-input" aria-label={t('Current weight ({0})', st.unit)} value={profile.currentWeight} placeholder="0.0" onChange={currentWeight => set({ currentWeight })} /></label>
+                  <label>{t('Height (cm)')}<NumberField className="current-weight-input" aria-label={t('Height (cm)')} value={profile.height} placeholder="0" onChange={height => set({ height })} /></label>
+                </div>
+                {profile.goal === 'lose_weight' && <label className="setup-target">{t('Target weight ({0})', st.unit)}<NumberField className="current-weight-input" aria-label={t('Target weight ({0})', st.unit)} value={profile.targetWeight} placeholder="0.0" onChange={targetWeight => set({ targetWeight })} /></label>}
+              </SetupCard>
+            </>}
+            {step === 1 && <>
+              <SetupCard title="Your weekly routine" icon="calendar">
+                <TrainingDays value={profile.days} onChange={days => set({ days })} />
+                <TrainingConstraints profile={profile} onChange={set} showEquipment={false} />
+              </SetupCard>
+              <SetupCard title="Training experience" icon="chart" description="Choose the level that best reflects your training today.">
+                <Choices label="Training experience" options={EXPERIENCES} value={profile.experience} onChange={experience => set({ experience })} />
+              </SetupCard>
+              <SetupCard title="Available equipment" icon="dumbbell" description="We’ll choose exercises you can do with your equipment.">
+                <Choices label="Available equipment" options={EQUIPMENT} value={profile.equipment} onChange={equipment => set({ equipment })} />
+                {profile.equipment === 'dumbbells' && <label className="setup-equipment-check"><input type="checkbox" checked={profile.hasBench === true} onChange={event => set({ hasBench: event.target.checked })} /><span>{t('I also have a stable exercise bench')}</span></label>}
+                {profile.equipment === 'bodyweight' && <label className="setup-equipment-check"><input type="checkbox" checked={profile.hasPullStation === true} onChange={event => set({ hasPullStation: event.target.checked })} /><span>{t('I have secure stations for both bodyweight rows and pull-ups')}</span></label>}
+              </SetupCard>
+              {profile.goal === 'strength' && <section className="card setup-card"><StrengthLiftChoices profile={profile} onChange={set} requireSelection /></section>}
+              <SetupCard title="Sex" icon="person" description="Your selection sets the physique focus of your plan.">
+                <Choices label="Sex" options={SEX_OPTIONS} value={profile.sex} onChange={sex => set({ sex, body: sex === 'unspecified' ? 'none' : sex })} />
+                <div className="setup-focus" aria-live="polite"><Icon name="target" /><p><strong>{t(physiqueFocusFor(profile).label)}</strong><span>{t(physiqueFocusFor(profile).description)}</span></p></div>
+              </SetupCard>
+            </>}
+            {step === 2 && <>
+              <SetupCard title="Your profile" icon="person" onEdit={() => navigate('/setup/1')}>
+                <div className="setup-review-photo"><ProfileAvatar value={profile.profileImage} name={user.name} viewable /><div><strong>{user.name}</strong><span>{t(profile.profileImage ? 'Profile photo' : 'No profile photo added (optional)')}</span></div></div>
+                <Summary rows={detailRows} />
+              </SetupCard>
+              <SetupCard title="Your training preferences" icon="dumbbell" onEdit={() => navigate('/setup/2')}>
+                <Summary rows={trainingRows} />
+                {profile.goal === 'strength' && <><h3 className="setup-section-title">{t('Lifts you want to improve')}</h3>
+                  <Summary rows={Object.entries(STRENGTH_PATTERNS).map(([pattern, spec]) => {
+                    const id = strengthLiftsFor(profile)[pattern]
+                    return [t(spec.label), t(EXIDX[id]?.n || EXTRA_EXERCISES.find(exercise => exercise.id === id)?.n || 'Unavailable')]
+                  })} />
+                </>}
+              </SetupCard>
+              <SetupCard title="Anything we should know?" icon="clipboard" description="Optional injury or limitation">
+                <label className="setup-note"><span className="sr-only">{t('Anything we should know?')}</span><TextArea rows="3" maxLength="300" placeholder={t('Share any injuries or limitations with your trainer.')} value={profile.injuryNote} onChange={event => set({ injuryNote: event.target.value })} /><span className="setup-note-count" dir="ltr">{profile.injuryNote.length} / 300</span></label>
+              </SetupCard>
+              {hasExistingPlan && <SetupCard title="Your current plan" icon="calendar" description="You already have a plan. Keep its schedule, or use the program selected below. Previous routines and workout history stay saved.">
+                <Choices label="Your current plan" options={[{ value: 'keep', label: 'Keep my current schedule' }, { value: 'replace', label: 'Use the selected program below' }]} value={replacePlan ? 'replace' : 'keep'} onChange={choice => setReplacePlan(choice === 'replace')} />
+                {preservePlan && <p className="small muted setup-preserve-note">{t('The program below is a preview. Your current schedule will be kept when you save.')}</p>}
+              </SetupCard>}
+              <ProgramRecommendation profile={profile} plan={recommendation} unit={st.unit} onChoose={programId => set({ programId })} />
+            </>}
+          </fieldset>
+          <footer className="setup-form-footer">
+            {error && <p className="setup-error" role="alert"><Icon name="info" />{error}</p>}
+            {step === 1 && trainingStepError(profile) && <p className="setup-validation" aria-live="polite"><Icon name="info" />{t(trainingStepError(profile))}</p>}
+            <div className="setup-actions">
+              {step > 0 && <Button type="button" icon="chevronLeft" disabled={saving} onClick={() => navigate('/setup/' + step)}>{t('Previous step')}</Button>}
+              <Button type="submit" variant="primary" trailingIcon={step < 2 ? 'chevronRight' : 'check'} disabled={saving || photoBusy || (step === 1 && !!trainingStepError(profile)) || (step === 2 && !preservePlan && recommendation.status === 'NO_FEASIBLE_PLAN')}>{saving ? t('Saving…') : step === 0 ? t('Continue to training') : step === 1 ? t('Review my profile') : t('Save profile and continue')}</Button>
+            </div>
+          </footer>
+        </form>
+      </div>
+    </div>
   </main>
 }
 
 export function ProfileLoading({ error }) {
-  return <main className="profile-setup"><div className="card" role="status">
+  return <main className="profile-setup setup-loading auth-gold"><div className="card" role="status">
+    <img src="/brand/rozer-logo.png" alt="ROZER" width="1254" height="1254" />
+    <div className="setup-loading-icon"><Icon name={error ? 'info' : 'person'} /></div>
     <h1>{t(error ? 'Unable to load your profile' : 'Loading your profile…')}</h1>
+    {!error && <p className="setup-intro">{t('Getting your fitness profile ready.')}</p>}
     {error && <><p className="muted setup-intro">{t(error)}</p>
-      <Button onClick={() => useStore.getState().pullState()}>{t('Try again')}</Button>
-      <Button onClick={() => useStore.getState().signOut()}>{t('Sign out')}</Button>
+      <div className="setup-loading-actions"><Button variant="primary" onClick={() => useStore.getState().pullState()}>{t('Try again')}</Button>
+      <Button onClick={() => useStore.getState().signOut()}>{t('Sign out')}</Button></div>
     </>}
   </div></main>
 }

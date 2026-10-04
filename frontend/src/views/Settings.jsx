@@ -346,6 +346,7 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
   return <>
     <h3>{t('Create your profile')}</h3>
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Create an account with your email and password.')}</div>
+    <p className="small registration-setup-note">{t('During profile setup, you can upload a profile photo and choose your training days per week.')}</p>
     <TextField ref={nameRef} placeholder={t('Your name')} maxLength={40} />
     <div style={{ height: 10 }} /><input className="input" type="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
     <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="new-password" placeholder={t('Password (at least 8 characters)')} value={password} onChange={e => setPassword(e.target.value)} />

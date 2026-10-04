@@ -25,6 +25,11 @@ cd frontend && npm install && npm run dev
 cd frontend && npm test
 ```
 
+The frontend development server proxies API requests and exercise media to
+`http://127.0.0.1:8080`, so keep Docker running. If you change `WEB_PORT`, set
+`API_TARGET` and `MEDIA_TARGET` to that web URL when starting `npm run dev`.
+For a separately running local API, set `API_TARGET=http://127.0.0.1:3000`.
+
 ## Guidelines
 
 - **Keep it dependency-light.** The frontend uses React + Router + Zustand and nothing else;

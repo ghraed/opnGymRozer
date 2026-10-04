@@ -1,4 +1,22 @@
+import { strengthLiftOptions } from './training-movements.js'
+
 const positive = value => ['number', 'string'].includes(typeof value) && Number.isFinite(Number(value)) && Number(value) > 0
+
+// New setup requires explicit answers; saved profiles keep their legacy validation.
+export function trainingStepError(profile = {}) {
+  const message = profileStepError(profile, 1)
+  if (message) return message
+  if (profile.sessionMinutes == null) return 'Choose a valid session duration'
+  if (profile.recovery == null) return 'Choose a valid recovery option'
+  if (!['male', 'female', 'unspecified'].includes(profile.sex)) return 'Choose a valid sex option'
+  if (profile.goal === 'strength') {
+    const options = strengthLiftOptions(profile)
+    if (Object.entries(options).some(([pattern, choices]) => choices.length && !choices.some(choice => choice.id === profile.strengthLifts?.[pattern]))) {
+      return 'Choose one exercise for each pattern.'
+    }
+  }
+  return ''
+}
 
 export function profileStepError(profile = {}, step = 0) {
   if (step === 0) {

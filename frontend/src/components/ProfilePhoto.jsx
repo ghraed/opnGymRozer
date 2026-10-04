@@ -94,7 +94,7 @@ export default function ProfilePhoto({ value, name, onChange, onBusyChange, disa
       <div className="profile-photo-controls"><p className="profile-photo-title">{t('Profile photo')} <span className="small muted">{t('Optional')}</span></p>
         <p className="small muted">{t('JPG, PNG, or WebP · Up to 10 MB')}</p>
         <div className="profile-photo-actions">
-          <Button type="button" size="sm" disabled={disabled || busy} onClick={() => input.current?.click()}>{busy ? t('Preparing photo…') : value ? t('Change photo') : t('Add photo')}</Button>
+          <Button type="button" size="sm" disabled={disabled || busy} onClick={() => input.current?.click()}>{busy ? t('Preparing photo…') : value ? t('Change photo') : t('Upload profile photo')}</Button>
           {value && <Button type="button" size="sm" disabled={disabled || busy} onClick={() => { onChange(null); setError('') }}>{t('Remove photo')}</Button>}
         </div>
       </div>
