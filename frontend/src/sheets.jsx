@@ -33,8 +33,8 @@ const SHOW_EFFORT_UI = false
 const stripEffortLabel = txt => (txt || '').replace(/\s+\((?:RIR|RPE)\s+[^)]+\)$/, '')
 
 /* ============================ custom confirm dialog ============================ */
-function ConfirmDialog({ title, message, confirmText, cancelText, danger, onConfirm, close }) {
-  return <div style={{ textAlign: 'center', padding: '4px 0' }}>
+function ConfirmDialog({ title, message, confirmText, cancelText, danger, onConfirm, close, className }) {
+  return <div className={className} style={{ textAlign: 'center', padding: '4px 0' }}>
     {title && <h3 style={{ marginBottom: 8 }}>{title}</h3>}
     <div className="muted" style={{ marginBottom: 18, lineHeight: 1.5 }}>{message}</div>
     <button className={'btn ' + (danger ? 'danger' : 'primary')} onClick={() => { close(); onConfirm && onConfirm() }}>{confirmText || t('Confirm')}</button>

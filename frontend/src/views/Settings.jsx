@@ -12,6 +12,7 @@ import { DEMO } from '../lib/demo.js'
 import { MOBILE, shareExport, syncReminder } from '../lib/mobile.js'
 import { loadStarterPlan, confirmSheet, importFromApp, onboardingSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
+import DeveloperContact from '../components/DeveloperContact.jsx'
 import ProfilePhoto from '../components/ProfilePhoto.jsx'
 import { Section, Row, SelectRow, Switch, Segmented, Button, TextField } from '../components/ui.jsx'
 
@@ -69,6 +70,7 @@ export default function Settings() {
     <div className="hdr">
       <button className="iconbtn" onClick={() => nav('/home')} aria-label={t('Home')}><Icon name="chevronLeft" /></button>
       <div style={{ flex: 1, marginLeft: 10 }}><h1>{t('Settings')}</h1></div>
+      <DeveloperContact />
     </div>
 
     {/* ---------- account (demo and mobile builds have nothing to sign in to) ---------- */}
@@ -344,7 +346,7 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
     } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') toast(e.message || t('Registration failed')) }
   }
   return <>
-    <h3>{t('Create your profile')}</h3>
+    <div className="row between"><h3>{t('Create your profile')}</h3><DeveloperContact /></div>
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Create an account with your email and password.')}</div>
     <p className="small registration-setup-note">{t('During profile setup, you can upload a profile photo and choose your training days per week.')}</p>
     <TextField ref={nameRef} placeholder={t('Your name')} maxLength={40} />

@@ -7,6 +7,7 @@ import { DEMO } from '../lib/demo.js'
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
+import DeveloperContact from '../components/DeveloperContact.jsx'
 import { onboardingSheet } from '../sheets.jsx'
 
 function PasswordField({ value, onChange, busy, register = false, confirm = false }) {
@@ -87,6 +88,7 @@ export default function Login() {
         <button type="button" aria-pressed={!registering} disabled={busy} onClick={() => changeMode('signin')}>{t('Sign in')}</button>
         <button type="button" aria-pressed={registering} disabled={busy} onClick={() => changeMode('register')}>{t('Create account')}</button>
       </div>
+      <DeveloperContact />
     </header>
     <div className="auth-layout">
       <section className="auth-brand" aria-label="ROZER">

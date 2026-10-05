@@ -1,5 +1,7 @@
 // Arabic UI strings. Keys are the English source strings (see lib/i18n.js).
 export default {
+  'Contact developer': 'تواصل مع المطوّر',
+  'do you want to contact the developer for any help': 'هل تريد التواصل مع المطوّر للحصول على أي مساعدة؟',
   "Complete your fitness profile": "أكمل ملفك الرياضي",
   "Your body and goals": "جسمك وأهدافك",
   "Your training preferences": "تفضيلات التدريب",
