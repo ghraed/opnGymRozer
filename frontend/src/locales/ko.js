@@ -610,4 +610,8 @@ export default {
   '+{0} more': '+{0} more',
   'Keep your goal in sight: {0}.': 'Keep your goal in sight: {0}.',
   'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.': 'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.',
+  'Show password': '비밀번호 표시',
+  'Hide password': '비밀번호 숨기기',
+  'Account access': '계정 접속',
+  'Already have an account?': '이미 계정이 있으신가요?',
 }

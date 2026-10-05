@@ -610,4 +610,8 @@ export default {
   '+{0} more': '+{0} more',
   'Keep your goal in sight: {0}.': 'Keep your goal in sight: {0}.',
   'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.': 'Use a weight that makes the final repetitions challenging; reaching complete failure is not required.',
+  'Show password': 'Mostrar contraseña',
+  'Hide password': 'Ocultar contraseña',
+  'Account access': 'Acceso a la cuenta',
+  'Already have an account?': '¿Ya tienes una cuenta?',
 }
