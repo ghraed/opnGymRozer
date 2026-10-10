@@ -4,15 +4,23 @@ import { beep, vibrate } from '../lib/sound.js'
 import { api } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { useStore } from './useStore.js'
+import { nativeRestSupported, syncRestNotification, cancelRestNotification, finishRestNotification, restoreRestNotification } from '../lib/rest-notification.js'
 
 // Fire-and-forget: lets the server push a "rest over" alert if this tab gets suspended
 // before the local timer completes. No-ops for guests / offline.
-const pushRestTimer = sec => { if (useStore.getState().user) api('/api/push/rest-timer', { method: 'POST', body: JSON.stringify({ seconds: sec }) }).catch(() => {}) }
-const cancelPushRestTimer = () => { if (useStore.getState().user) api('/api/push/rest-timer/cancel', { method: 'POST', body: '{}' }).catch(() => {}) }
+const pushRestTimer = sec => { if (!nativeRestSupported() && useStore.getState().user) api('/api/push/rest-timer', { method: 'POST', body: JSON.stringify({ seconds: sec }) }).catch(() => {}) }
+const cancelPushRestTimer = () => { if (!nativeRestSupported() && useStore.getState().user) api('/api/push/rest-timer/cancel', { method: 'POST', body: '{}' }).catch(() => {}) }
+
+const restLeft = endsAt => Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
+const restBeep = snd => {
+  beep(snd, 880, 0.15); beep(snd, 880, 0.15, 0.25); beep(snd, 1320, 0.4, 0.5)
+  vibrate([200, 100, 200])
+}
 
 let toastTm = null
 let timerInt = null
 let timerTick = null
+let restChanges = 0
 let workInt = null
 let workTick = null
 let workDone = null
@@ -38,20 +46,31 @@ export const useUI = create((set, get) => ({
     toastTm = setTimeout(() => set({ toastMsg: '' }), 2200)
   },
 
-  startRest(sec) {
+  startRest(sec, restoredEndsAt = null) {
     get().stopRest()
-    const endsAt = Date.now() + sec * 1000
-    set({ timer: { left: sec, total: sec, endsAt } })
+    sec = Math.max(1, Math.round(Number(sec)) || 1)
+    const endsAt = restoredEndsAt || Date.now() + sec * 1000
+    const timer = { left: restLeft(endsAt), total: sec, endsAt }
+    set({ timer })
+    if (!restoredEndsAt) syncRestNotification(timer, useStore.getState().S.sound)
     pushRestTimer(sec)
     timerTick = () => {
       const tm = get().timer
       if (!tm) return
-      const left = Math.max(0, Math.round((tm.endsAt - Date.now()) / 1000))
+      const left = restLeft(tm.endsAt)
       if (left === tm.left) return
       const snd = useStore.getState().S.sound
       if (left <= 0) {
-        beep(snd, 880, 0.15); beep(snd, 880, 0.15, 0.25); beep(snd, 1320, 0.4, 0.5)
-        vibrate([200, 100, 200]); get().toast(t('Rest over — next set!')); get().stopRest(); return
+        get().toast(t('Rest over — next set!')); get().stopRest(true)
+        const finishedRevision = restChanges
+        if (nativeRestSupported()) {
+          // The alarm and this tick race for the same native completion. Never play a
+          // second end alert on resume; permission/plugin failure keeps local feedback.
+          finishRestNotification(tm.endsAt).then(handled => {
+            if (!handled && restChanges === finishedRevision && document.visibilityState !== 'hidden') restBeep(snd)
+          })
+        } else restBeep(snd)
+        return
       }
       if (left <= 3) beep(snd, 660, 0.1)
       set({ timer: { ...tm, left } })
@@ -62,17 +81,23 @@ export const useUI = create((set, get) => ({
   addRest(sec) {
     const tm = get().timer
     if (!tm) return
-    const left = tm.left + sec
+    const endsAt = tm.endsAt + sec * 1000
+    const left = restLeft(endsAt)
     // taking off more than is left means "I'm ready now" — same as skipping, and it keeps a
     // negative duration out of both the progress bar and the server-side push schedule
     if (left <= 0) { get().stopRest(); return }
-    set({ timer: { ...tm, left, total: tm.total + sec, endsAt: tm.endsAt + sec * 1000 } })
+    const timer = { ...tm, left, total: Math.max(1, tm.total + sec), endsAt }
+    set({ timer })
+    syncRestNotification(timer, useStore.getState().S.sound)
     pushRestTimer(left)
   },
-  stopRest() {
+  stopRest(finished = false) {
+    restChanges++
     if (timerInt) clearInterval(timerInt); timerInt = null
     if (timerTick) document.removeEventListener('visibilitychange', timerTick); timerTick = null
     if (get().timer) cancelPushRestTimer()
+    // React passes a click event to Skip; only the internal boolean means completion.
+    if (get().timer && finished !== true) cancelRestNotification()
     set({ timer: null })
   },
 
@@ -129,3 +154,13 @@ export const useUI = create((set, get) => ({
     set({ work: null })
   }
 }))
+
+// Android may reclaim the WebView while locked. Restore its native deadline on a cold
+// launch without rescheduling or replaying the alarm, unless the user already changed it.
+if (nativeRestSupported()) {
+  restoreRestNotification().then(timer => {
+    if (timer?.endsAt > Date.now() && restChanges === 0) {
+      useUI.getState().startRest(timer.total, timer.endsAt)
+    }
+  })
+}

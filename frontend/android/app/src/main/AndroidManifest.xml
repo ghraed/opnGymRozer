@@ -20,6 +20,8 @@
             </intent-filter>
         </activity>
 
+        <receiver android:name=".RestTimerReceiver" android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -32,6 +34,8 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Preserve end-of-rest haptics when the native notification owns the alert. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Workout-day reminder: lets the local-notifications plugin fire at the exact minute
          on Android 12+. Where it isn't granted, scheduling silently falls back to inexact
          alarms — the reminder still arrives, just not to the minute. -->
