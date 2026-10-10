@@ -1,9 +1,11 @@
 import http from 'node:http'
+import https from 'node:https'
 import crypto from 'node:crypto'
 import webpush from 'web-push'
 import { createPool, createPasswordUser, deleteClientAccount, getUser, getUserByEmail, hashPassword, migrate, readClientState, saveClientState, saveTrainerPlan, setting } from './db.js'
 import { parseJson } from './state.js'
 import { profileComplete } from './profile.js'
+import { deliverPush, deliverReminder } from './push.js'
 
 const PORT = +(process.env.PORT || 3000)
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080'
@@ -15,6 +17,9 @@ await migrate(pool)
 const SECRET = process.env.SESSION_SECRET || await setting(pool, 'session_secret', () => crypto.randomBytes(32).toString('hex'))
 const vapid = await setting(pool, 'vapid', () => webpush.generateVAPIDKeys())
 webpush.setVapidDetails(process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:admin@localhost'), vapid.publicKey, vapid.privateKey)
+// Node's 250 ms address-selection window can abandon reachable push services
+// on slower connections. Keep IPv4/IPv6 fallback, but allow each attempt 2 s.
+const pushAgent = new https.Agent({ autoSelectFamilyAttemptTimeout: 2000 })
 
 const publicUser = u => ({ id: u.id, name: u.name, role: u.role, admin: u.role === 'trainer', activated: u.role === 'trainer' || !!u.activated })
 const sessionVersion = u => Number(u.session_version) || 0
@@ -79,26 +84,35 @@ function livePresence(id) { const p = presence.get(id); if (!p || Date.now() - p
 setInterval(() => { for (const [id, p] of presence) if (Date.now() - p.updatedAt > PRESENCE_TTL) presence.delete(id) }, 30000).unref()
 async function subscriptions(uid) { const [rows] = await pool.execute('SELECT endpoint,keys_json FROM push_subscriptions WHERE user_id=?', [uid]); return rows.map(r => ({ endpoint: r.endpoint, keys: parseJson(r.keys_json) })) }
 async function sendPush(uid, payload) {
-  for (const sub of await subscriptions(uid)) try { await webpush.sendNotification(sub, JSON.stringify(payload), { urgency: 'high' }) }
-  catch (e) { if (e.statusCode === 404 || e.statusCode === 410) await pool.execute('DELETE FROM push_subscriptions WHERE endpoint_hash=UNHEX(SHA2(?,256))', [sub.endpoint]); else console.error('push failed', e) }
+  return deliverPush(await subscriptions(uid), payload, {
+    send: (sub, data, options) => webpush.sendNotification(sub, data, { ...options, agent: pushAgent }),
+    remove: endpoint => pool.execute('DELETE FROM push_subscriptions WHERE endpoint_hash=UNHEX(SHA2(?,256))', [endpoint])
+  })
 }
 function scheduleRest(uid, sec) { if (restTimers.has(uid)) clearTimeout(restTimers.get(uid)); restTimers.set(uid, setTimeout(() => { restTimers.delete(uid); sendPush(uid, { title: 'Rest over 💪', body: 'Time for your next set.', tag: 'rest-timer' }).catch(console.error) }, sec * 1000)) }
 
-function effectiveRoutineId(S, iso) { const ov = S.dayPlan?.[iso]; if (ov === 'rest') return null; if (ov && S.routines?.some(r => r.id === ov)) return ov; return S.week?.[new Date(iso + 'T12:00:00').getDay()] || null }
-function userNow(tz) { try { const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()); const g = t => p.find(x => x.type === t)?.value; return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${g('hour')}:${g('minute')}` } } catch { return null } }
+function effectiveRoutineId(S, iso) { const ov = S.dayPlan?.[iso]; if (ov === 'rest') return null; if (ov && S.routines?.some(r => r.id === ov)) return ov; return S.week?.[new Date(iso + 'T12:00:00Z').getUTCDay()] || null }
+function userNow(tz) { try { const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()); const g = t => p.find(x => x.type === t)?.value; return { date: `${g('year')}-${g('month')}-${g('day')}`, time: `${g('hour')}:${g('minute')}` } } catch { return null } }
+let reminderScanRunning = false
 setInterval(async () => {
+  if (reminderScanRunning) return
+  reminderScanRunning = true
   try {
     const [rows] = await pool.query('SELECT u.id,u.role,u.last_reminder_date,s.settings_json,s.plan_json,s.progress_json FROM users u JOIN client_states s ON s.user_id=u.id WHERE u.disabled=0 AND (u.activated=1 OR u.role=\'trainer\')')
     for (const row of rows) {
       const settings = parseJson(row.settings_json), plan = parseJson(row.plan_json), progress = parseJson(row.progress_json), now = userNow(settings.reminder?.tz || 'UTC')
       if (row.role !== 'trainer' && !profileComplete(settings.onboarding)) continue
-      if (!settings.reminder?.on || !now || settings.reminder.time !== now.time || String(row.last_reminder_date || '').slice(0, 10) === now.date || (progress.workouts || []).some(w => w.d === now.date)) continue
+      const lastReminder = row.last_reminder_date instanceof Date ? row.last_reminder_date.toISOString().slice(0, 10) : String(row.last_reminder_date || '').slice(0, 10)
+      if (!settings.reminder?.on || !now || settings.reminder.time !== now.time || lastReminder === now.date || (progress.workouts || []).some(w => w.d === now.date)) continue
       const rid = effectiveRoutineId(plan, now.date); if (!rid || !(await subscriptions(row.id)).length) continue
       const routine = (plan.routines || []).find(r => r.id === rid)
-      await pool.execute('UPDATE users SET last_reminder_date=? WHERE id=?', [now.date, row.id])
-      await sendPush(row.id, { title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today', body: "It's on your plan — let's go 💪", tag: 'day-reminder' })
+      await deliverReminder(
+        () => sendPush(row.id, { title: routine ? `${routine.emoji || '🏋️'} ${routine.name} today` : 'Workout planned today', body: "It's on your plan — let's go 💪", tag: 'day-reminder' }),
+        () => pool.execute('UPDATE users SET last_reminder_date=? WHERE id=?', [now.date, row.id])
+      )
     }
   } catch (e) { console.error('reminder scan failed', e) }
+  finally { reminderScanRunning = false }
 }, 10000).unref()
 
 async function inviteIsOpen(code) { const [rows] = await pool.execute('SELECT 1 FROM invites WHERE code=? AND used_by IS NULL AND revoked_at IS NULL', [code]); return !!rows.length }
@@ -131,7 +145,7 @@ const routes = {
   'GET /api/push/public-key': async (req, res) => json(res, 200, { key: vapid.publicKey }),
   'POST /api/push/subscribe': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const sub = (await readBody(req)).subscription; if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return json(res, 400, { error: 'invalid subscription' }); await pool.execute('INSERT INTO push_subscriptions(user_id,endpoint_hash,endpoint,keys_json) VALUES (?,UNHEX(SHA2(?,256)),?,?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),keys_json=VALUES(keys_json)', [u.id, sub.endpoint, sub.endpoint, JSON.stringify(sub.keys)]); json(res, 200, { ok: true }) },
   'POST /api/push/unsubscribe': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const b = await readBody(req); await pool.execute('DELETE FROM push_subscriptions WHERE user_id=? AND endpoint_hash=UNHEX(SHA2(?,256))', [u.id, b.endpoint || '']); json(res, 200, { ok: true }) },
-  'POST /api/push/test': async (req, res) => { const u = await requireUser(req, res); if (u) { await sendPush(u.id, { title: 'ROZER', body: 'Test notification ✅ — this is what alerts look like.', tag: 'test' }); json(res, 200, { ok: true }) } },
+  'POST /api/push/test': async (req, res) => { const u = await requireUser(req, res); if (u) { const sent = await sendPush(u.id, { title: 'ROZER', body: 'Test notification ✅ — this is what alerts look like.', tag: 'test' }); if (!sent) return json(res, 502, { error: 'Could not deliver the notification to the push service. Check the API logs and try enabling notifications again.' }); json(res, 200, { ok: true }) } },
   'POST /api/push/rest-timer': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const sec = Math.max(1, Math.min(3600, Math.round(+(await readBody(req)).seconds || 0))); scheduleRest(u.id, sec); json(res, 200, { ok: true }) },
   'POST /api/push/rest-timer/cancel': async (req, res) => { const u = await requireUser(req, res); if (!u) return; if (restTimers.has(u.id)) clearTimeout(restTimers.get(u.id)); restTimers.delete(u.id); json(res, 200, { ok: true }) },
   'POST /api/activity': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const b = await readBody(req); if (b.active) presence.set(u.id, { name: String(b.name || '').slice(0, 60), exIdx: +b.exIdx || 0, exTotal: +b.exTotal || 0, setsDone: +b.setsDone || 0, setsTotal: +b.setsTotal || 0, startedAt: +b.startedAt || Date.now(), updatedAt: Date.now() }); else presence.delete(u.id); json(res, 200, { ok: true }) },

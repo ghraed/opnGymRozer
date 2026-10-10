@@ -9,6 +9,7 @@ createRoot(document.getElementById('root')).render(
 )
 
 // Not in the mobile build: the native shell already serves everything from disk.
-if (!MOBILE && 'serviceWorker' in navigator && location.protocol === 'https:') {
+// Localhost over HTTP is also a secure context and needs the worker for Web Push.
+if (!MOBILE && 'serviceWorker' in navigator && window.isSecureContext) {
   navigator.serviceWorker.register('sw.js').catch(() => {})
 }
