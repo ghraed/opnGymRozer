@@ -1,3 +1,4 @@
+import { planCycle } from './subscription-periods.js'
 import crypto from 'node:crypto'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -25,6 +26,7 @@ export function planInput(body) {
 const publicPlan = row => ({ id: row.id, name: row.name, description: row.description,
   durationCount: Number(row.duration_count), durationUnit: row.duration_unit,
   price: String(row.price), currency: row.currency, active: !!row.active,
+  subscriptionCycle: planCycle({ durationCount: Number(row.duration_count), durationUnit: row.duration_unit }),
   version: Number(row.version), createdAt: row.created_at, updatedAt: row.updated_at })
 
 export async function listMembershipPlans(pool) {

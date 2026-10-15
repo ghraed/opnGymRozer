@@ -1,3 +1,4 @@
+import { financeOverview, listSubscriptions, createSubscription, cancelSubscription } from './subscriptions.js'
 import { listMembershipPlans, writeMembershipPlan } from './membership-plans.js'
 import { isStaff, canViewUser, publicUser } from './access.js'
 import { manageUser } from './admin-users.js'
@@ -223,6 +224,23 @@ const routes = {
     if (!['client', 'trainer', 'admin'].includes(b.role)) return json(res, 400, { error: 'invalid role' })
     const id = await manageUser(pool, actor, { id: b.id, role: b.role }, 'update')
     json(res, 200, { ok: true, id, role: b.role })
+  },
+  'GET /api/admin/finance': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, await financeOverview(pool))
+  },
+  'GET /api/admin/subscriptions': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, await listSubscriptions(pool))
+  },
+  'POST /api/admin/subscriptions': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const result = await createSubscription(pool, actor, await readBody(req))
+    json(res, result.replayed ? 200 : 201, result)
+  },
+  'POST /api/admin/subscription/cancel': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, { subscription: await cancelSubscription(pool, actor, await readBody(req)) })
   },
   'GET /api/admin/membership-plans': async (req, res) => {
     if (!(await requireAdmin(req, res))) return

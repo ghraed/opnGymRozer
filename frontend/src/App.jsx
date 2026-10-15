@@ -29,6 +29,8 @@ import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
 import MembershipPlans from './views/MembershipPlans.jsx'
+import Finance from './views/Finance.jsx'
+import Subscriptions from './views/Subscriptions.jsx'
 import ClientDashboard from './views/ClientDashboard.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
@@ -214,6 +216,8 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/finance" element={user?.role === 'admin' ? <Finance /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/subscriptions" element={user?.role === 'admin' ? <Subscriptions /> : <Navigate to="/home" replace />} />
               <Route path="/admin/memberships" element={user?.role === 'admin' ? <MembershipPlans /> : <Navigate to="/home" replace />} />
               <Route path="/admin/clients/:id" element={user?.admin ? <ClientDashboard /> : <Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />
