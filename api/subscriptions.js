@@ -24,11 +24,12 @@ export function subscriptionInput(body) {
 }
 
 const selectSubscriptions = `SELECT s.*,u.name current_member_name,u.email member_email FROM member_subscriptions s LEFT JOIN users u ON u.id=s.member_id`
-const publicSubscription = (row, today) => {
+export const publicSubscription = (row, today) => {
   const subscription = { id: row.id, memberId: row.member_id, memberName: row.current_member_name || row.member_name,
     memberEmail: row.member_email || null, planId: row.plan_id, planName: row.plan_name,
     cycle: row.cycle, startsOn: dateText(row.starts_on), endsOn: dateText(row.ends_on), price: String(row.price), currency: row.currency,
     notes: row.notes, version: Number(row.version), cancelledAt: row.cancelled_at,
+    paymentStatus: row.payment_status, paymentDueOn: row.payment_due_on ? dateText(row.payment_due_on) : null,
     cancellationReason: row.cancellation_reason, createdAt: row.created_at }
   return { ...subscription, status: subscriptionStatus(subscription, today) }
 }

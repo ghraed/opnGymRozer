@@ -35,6 +35,6 @@ export default function Finance() {
       <li><strong>Choose a member.</strong> Create or enable their client account in <Link to="/admin">Admin → All users</Link>.</li>
       <li><strong>Add their subscription.</strong> Select the period, matching plan and start date. The end date and status are calculated for you.</li>
     </ol></section>
-    <aside className="card finance-note"><h2>What a subscription records</h2><p>Subscriptions record membership coverage and the agreed price. They do not renew or charge automatically. Payments, invoices and receipts are not available yet.</p><p className="small muted">Finance pages and their data are restricted to admins. Trainers and clients cannot access them.</p></aside>
+    <aside className="card finance-note"><h2>What a subscription records</h2><p>Subscriptions record membership coverage and the agreed price. They do not renew or charge automatically. Payment status is reviewed manually in the renewal tracker. Payment processing, partial payments, invoices and receipts are not available yet.</p><p className="small muted">Finance pages and their data are restricted to admins. Trainers and clients cannot access them.</p></aside>
   </main>
 }

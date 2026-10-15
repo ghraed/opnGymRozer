@@ -1,3 +1,4 @@
+import { renewalTracker, reviewPayment, queueReminder, scheduleMembershipReminders, dispatchMembershipReminders, memberReminders, saveReminderSettings } from './renewals.js'
 import { financeOverview, listSubscriptions, createSubscription, cancelSubscription } from './subscriptions.js'
 import { listMembershipPlans, writeMembershipPlan } from './membership-plans.js'
 import { isStaff, canViewUser, publicUser } from './access.js'
@@ -120,6 +121,16 @@ setInterval(async () => {
   finally { reminderScanRunning = false }
 }, 10000).unref()
 
+let membershipReminderScanRunning = false
+async function runMembershipReminders() {
+  if (membershipReminderScanRunning) return
+  membershipReminderScanRunning = true
+  try { await scheduleMembershipReminders(pool); await dispatchMembershipReminders(pool, sendPush) }
+  catch (error) { console.error('membership reminder scan failed', error) }
+  finally { membershipReminderScanRunning = false }
+}
+setInterval(runMembershipReminders, 60000).unref()
+
 async function inviteIsOpen(code) { const [rows] = await pool.execute('SELECT 1 FROM invites WHERE code=? AND used_by IS NULL AND revoked_at IS NULL', [code]); return !!rows.length }
 
 const routes = {
@@ -224,6 +235,36 @@ const routes = {
     if (!['client', 'trainer', 'admin'].includes(b.role)) return json(res, 400, { error: 'invalid role' })
     const id = await manageUser(pool, actor, { id: b.id, role: b.role }, 'update')
     json(res, 200, { ok: true, id, role: b.role })
+  },
+  'GET /api/admin/renewals': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, await renewalTracker(pool))
+  },
+  'POST /api/admin/subscription/payment': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, await reviewPayment(pool, actor, await readBody(req)))
+  },
+  'PUT /api/admin/reminder-settings': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, { settings: await saveReminderSettings(pool, actor, await readBody(req)) })
+  },
+  'POST /api/admin/subscription/remind': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const id = await queueReminder(pool, actor, await readBody(req))
+    await dispatchMembershipReminders(pool, sendPush, id)
+    const [[reminder]] = await pool.execute('SELECT id,delivery,detail FROM subscription_reminders WHERE id=?', [id])
+    json(res, 201, { reminder })
+  },
+  'GET /api/member/reminders': async (req, res) => {
+    const user = await requireSession(req, res); if (!user) return
+    json(res, 200, { reminders: await memberReminders(pool, user.id) })
+  },
+  'POST /api/member/reminder/read': async (req, res) => {
+    const user = await requireSession(req, res); if (!user) return
+    const body = await readBody(req)
+    if (!body || typeof body.id !== 'string') return json(res, 400, { error: 'reminder id required' })
+    const [result] = await pool.execute('UPDATE subscription_reminders r JOIN member_subscriptions s ON s.id=r.subscription_id SET r.read_at=CURRENT_TIMESTAMP(3) WHERE r.id=? AND s.member_id=?', [body.id, user.id])
+    json(res, result.affectedRows ? 200 : 404, result.affectedRows ? { ok: true } : { error: 'reminder not found' })
   },
   'GET /api/admin/finance': async (req, res) => {
     if (!(await requireAdmin(req, res))) return

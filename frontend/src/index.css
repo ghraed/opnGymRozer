@@ -1701,3 +1701,15 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
   .finance-page .membership-toolbar { flex-wrap: wrap; }
   .finance-page .membership-toolbar > .btn { font-size: 15px; }
 }
+
+.renewal-settings { margin: 16px 0; }
+.renewal-settings > summary, .renewal-history > summary, .renewal-audit > summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+.renewal-audit { margin-top: 16px; border-top: 1px solid var(--sep); }
+.renewal-audit p { line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.renewal-overdue { color: var(--red); }
+.renewal-history { margin-top: 20px; }
+.renewal-history .client-row { align-items: flex-start; }
+.renewal-history .client-row > div { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.membership-notices { max-width: 900px; margin: 0 auto 16px; }
+.membership-notices h2 { font-size: 18px; color: var(--label); }
+.membership-notices p { line-height: 1.6; }

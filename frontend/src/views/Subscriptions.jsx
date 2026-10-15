@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { financeDate, filterSubscriptions } from '../lib/finance.js'
 import { membershipPrice } from '../lib/membership-plans.js'
@@ -60,6 +60,8 @@ function CancelSubscription({ subscription, onDone, onCancel }) {
 
 export default function Subscriptions() {
   const toast = useUI(s => s.toast)
+  const renewalId = useLocation().state?.renewSubscriptionId
+  const renewalOpened = useRef(false)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -77,6 +79,12 @@ export default function Subscriptions() {
       .catch(e => { if (!controller.signal.aborted) setError(e.message) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [revision])
+  useEffect(() => {
+    if (!data || !renewalId || renewalOpened.current) return
+    renewalOpened.current = true
+    const subscription = data.subscriptions.find(s => s.id === renewalId)
+    if (subscription?.memberId) setEditor({ memberId: subscription.memberId, cycle: subscription.cycle, startsOn: subscription.endsOn > data.asOf ? subscription.endsOn : data.asOf })
+  }, [data, renewalId])
   const visible = data ? filterSubscriptions(data.subscriptions, status, query) : []
   return <main className="finance-page"><header className="hdr finance-header"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / MEMBERSHIPS</p><h1>Member subscriptions</h1><p className="muted">Monthly, quarterly and yearly membership terms.</p></div></header>
     <div className="membership-toolbar"><Button disabled={loading || !!editor || !!cancelling} onClick={reload}>Refresh</Button><Button variant="primary" icon="plus" disabled={loading || !!error || !!editor || !!cancelling} onClick={() => setEditor({})}>New subscription</Button></div>
@@ -93,7 +101,8 @@ export default function Subscriptions() {
         <dl className="subscription-dates"><div><dt>Starts on</dt><dd>{financeDate(subscription.startsOn)}</dd></div><div><dt>Ends on</dt><dd>{financeDate(subscription.endsOn)}</dd></div></dl>
         {subscription.notes && <p className="subscription-notes">{subscription.notes}</p>}
         {subscription.cancellationReason && <p className="small muted">Cancellation reason: {subscription.cancellationReason}</p>}
-        <div className="client-account-actions">{subscription.memberId && <Link className="btn" to={'/admin/clients/' + encodeURIComponent(subscription.memberId)}>View member</Link>}
+        <p className="small muted">Payment: {({ unconfirmed: 'Not reviewed', unpaid: 'Awaiting payment', paid: 'Paid', waived: 'Waived' })[subscription.paymentStatus]}</p>
+        <div className="client-account-actions"><Link className="btn" to="/admin/renewals">Renewal tracker</Link>{subscription.memberId && <Link className="btn" to={'/admin/clients/' + encodeURIComponent(subscription.memberId)}>View member</Link>}
           {subscription.memberId && subscription.status !== 'cancelled' && <Button disabled={!!editor || !!cancelling} onClick={() => setEditor({ memberId: subscription.memberId, cycle: subscription.cycle, startsOn: subscription.endsOn > data.asOf ? subscription.endsOn : data.asOf })}>Add next term</Button>}
           {['active', 'scheduled'].includes(subscription.status) && <Button variant="danger" disabled={!!editor || !!cancelling} onClick={() => setCancelling(subscription)}>Cancel term</Button>}</div>
       </article>)}</div>
