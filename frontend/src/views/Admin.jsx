@@ -109,6 +109,7 @@ export default function Admin() {
       </Link>)}
     </div>}
 
+    {isAdmin && <Link className="card membership-entry" to="/admin/memberships"><div><h2>Membership plans</h2><p className="small muted">Manage gym packages, duration and pricing</p></div><Icon name="chevronRight" /></Link>}
     <InvitesCard invites={invites} reload={loadInvites} />
 
     {isAdmin && <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>Create user</Button>}

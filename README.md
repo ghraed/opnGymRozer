@@ -299,3 +299,44 @@ Database names must start with `opengym_test_`. Each suite refuses a nonempty
 database; the tests never connect to the application database through these
 variables. Standard `DB_HOST`, `DB_PORT`, `DB_USER` and `DB_PASSWORD` configure
 the test server connection. Use fresh databases for subsequent runs.
+
+## Membership plans and pricing
+
+Open **Admin → Membership plans** (`/#/admin/memberships`). Only admins can
+access this page and its API. Create and edit plans with a name, description /
+benefits, duration (days, weeks, months or years), total price and currency
+(USD or LBP). A price of zero is allowed. Prices are entered explicitly; no
+sample or default prices are installed. Each plan is priced in one currency,
+without automatic exchange-rate conversion. Create separate plans when offering
+prices in both currencies.
+
+Archive unused plans and restore them later. Archived plans and their prices
+remain saved; there is no destructive plan deletion. Search by name, description
+or currency, and switch between active, archived and all plans. Edits and status
+changes include a version so concurrent admin actions cannot silently overwrite
+each other. A conflict requires canceling and reopening the plan to use its latest
+version.
+
+Migration `005_membership_plans.sql` adds a separate catalog table at API startup
+without modifying existing users or workout plans. Monetary values use
+`DECIMAL(12,2)` and are returned as two-decimal strings. The total price is for the
+entire stated duration; duration units are retained (a calendar month is not
+converted to 30 days).
+
+| Method | Endpoint | Action |
+| --- | --- | --- |
+| GET | `/api/admin/membership-plans` | List all plans, including archived plans |
+| POST | `/api/admin/membership-plans` | Create a plan |
+| PUT | `/api/admin/membership-plan` | Edit a plan with its `id` and `version` |
+| POST | `/api/admin/membership-plan/status` | Set `active` with its `id` and `version` |
+
+Create/update bodies use `name`, `description`, `durationCount` (integer 1–3650),
+`durationUnit` (`day`, `week`, `month`, `year`), `price` (decimal string, maximum
+9999999999.99) and `currency` (`USD`, `LBP`). New plans start active. This step is
+the pricing catalog only: assigning memberships to members, renewals, billing,
+payment collection and workout access restrictions are separate features.
+
+To include the membership HTTP/integration suite, supply a third **empty,
+disposable** database using `TEST_MEMBERSHIP_DB_NAME=opengym_test_memberships`
+when running the API tests. The suite verifies upgrading an existing database,
+access controls, exact prices, validation, archive/restore and concurrent edits.

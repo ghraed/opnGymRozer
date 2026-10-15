@@ -1,3 +1,4 @@
+import { listMembershipPlans, writeMembershipPlan } from './membership-plans.js'
 import { isStaff, canViewUser, publicUser } from './access.js'
 import { manageUser } from './admin-users.js'
 import http from 'node:http'
@@ -222,6 +223,22 @@ const routes = {
     if (!['client', 'trainer', 'admin'].includes(b.role)) return json(res, 400, { error: 'invalid role' })
     const id = await manageUser(pool, actor, { id: b.id, role: b.role }, 'update')
     json(res, 200, { ok: true, id, role: b.role })
+  },
+  'GET /api/admin/membership-plans': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, { plans: await listMembershipPlans(pool) })
+  },
+  'POST /api/admin/membership-plans': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 201, { plan: await writeMembershipPlan(pool, actor, await readBody(req), 'create') })
+  },
+  'PUT /api/admin/membership-plan': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, { plan: await writeMembershipPlan(pool, actor, await readBody(req), 'update') })
+  },
+  'POST /api/admin/membership-plan/status': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, { plan: await writeMembershipPlan(pool, actor, await readBody(req), 'status') })
   },
   'GET /api/admin/invites': async (req, res) => { if (!(await requireTrainer(req, res))) return; const [rows] = await pool.query('SELECT i.*,u.name used_by_name FROM invites i LEFT JOIN users u ON u.id=i.used_by ORDER BY i.created_at DESC'); json(res, 200, { invites: rows.map(i => ({ code: i.code, note: i.note, createdBy: i.created_by, usedBy: i.used_by, usedByName: i.used_by_name, created: i.created_at, usedAt: i.used_at, revoked: !!i.revoked_at })), invite_only: INVITE_ONLY }) },
   'POST /api/admin/invites/new': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req); let code; do { code = crypto.randomBytes(8).toString('hex').toUpperCase() } while (await inviteIsOpen(code)); await pool.execute('INSERT INTO invites(code,note,created_by) VALUES (?,?,?)', [code, String(b.note || '').slice(0, 60), t.id]); json(res, 200, { invite: { code, note: b.note || '', createdBy: t.id, created: new Date().toISOString() } }) },

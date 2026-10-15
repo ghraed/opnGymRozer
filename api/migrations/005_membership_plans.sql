@@ -1,0 +1,20 @@
+CREATE TABLE membership_plans (
+  id VARCHAR(64) PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  description VARCHAR(2000) NOT NULL DEFAULT '',
+  duration_count SMALLINT UNSIGNED NOT NULL,
+  duration_unit ENUM('day','week','month','year') NOT NULL,
+  price DECIMAL(12,2) NOT NULL,
+  currency ENUM('USD','LBP') NOT NULL DEFAULT 'USD',
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  version INT UNSIGNED NOT NULL DEFAULT 1,
+  created_by VARCHAR(64) NULL,
+  updated_by VARCHAR(64) NULL,
+  created_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  CONSTRAINT fk_membership_plan_creator FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT fk_membership_plan_editor FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL,
+  CONSTRAINT chk_membership_plan_price CHECK (price >= 0),
+  CONSTRAINT chk_membership_plan_duration CHECK (duration_count BETWEEN 1 AND 3650),
+  INDEX idx_membership_plan_active (active, name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
