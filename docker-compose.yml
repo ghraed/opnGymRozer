@@ -46,6 +46,20 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  seed-admin:
+    profiles: ["tools"]
+    build: ./api
+    command: npm run db:seed-admin
+    restart: "no"
+    environment:
+      <<: *db-environment
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrator}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   seed-trainer:
     profiles: ["tools"]
     build: ./api

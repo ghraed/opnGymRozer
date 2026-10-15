@@ -229,3 +229,73 @@ if you run a modified version as a network service, you must offer that version'
 the same license. Nobody can turn openGym into a closed, proprietary product.
 
 Exercise images/GIFs are fetched from the upstream dataset and keep their own terms — see [NOTICE.md](NOTICE.md).
+
+## Admin and trainer accounts
+
+There are three separate roles: `client`, `trainer`, and `admin`. Existing
+trainers remain trainers after migration; nobody is automatically promoted.
+The API applies `004_admin_role.sql` at startup, preserving accounts and data.
+
+Admins use the **Admin** tab (`/admin`) to search all users, including trainers
+and other admins, create accounts, and open profiles. **Edit user profile**
+updates name, email, password, role, photo, activation and fitness information.
+The profile also exposes training-plan editing, account suspension/restoration
+and confirmed permanent deletion. New accounts created by an admin default to
+activated; the admin can leave a client pending. Clients without a completed
+fitness profile must finish setup before logging workouts.
+
+Trainers keep the client dashboard, plan editing, activation, suspension and
+client deletion, but cannot access trainer/admin profiles, create accounts or
+change roles. Public registration always creates pending clients regardless of
+role fields supplied by a caller. Role, identity, password and access changes
+revoke the affected user's sessions; editing your own admin profile refreshes
+your current session. Admins cannot delete, suspend or demote themselves; account
+mutations are serialized to prevent concurrent changes removing all enabled admins.
+
+### Bootstrap the first admin
+
+Run this on the server with the normal database environment, after deploying the
+`finance` branch. Supply the email of an existing account to promote it without
+changing its profile or password:
+
+```bash
+ADMIN_EMAIL='owner@example.com' npm --prefix api run db:seed-admin
+```
+
+To create a new account, also supply `ADMIN_PASSWORD` (8–200 characters) and,
+optionally, `ADMIN_NAME`. Keep the password out of source control and shell
+history; for example, enter it through a hidden prompt:
+
+```bash
+read -rs -p 'Admin password: ' ADMIN_PASSWORD
+export ADMIN_PASSWORD
+ADMIN_EMAIL='owner@example.com' ADMIN_NAME='Owner' npm --prefix api run db:seed-admin
+unset ADMIN_PASSWORD
+```
+
+Docker deployments can use the dedicated tools service; rebuild it from this
+branch and pass the target email (and password only for a new account/reset):
+
+```bash
+docker compose --profile tools build seed-admin
+docker compose --profile tools run --rm -e ADMIN_EMAIL='owner@example.com' seed-admin
+```
+
+No default admin password is shipped. The trainer seed command refuses to
+overwrite an admin account. Sign in again after promoting an existing account.
+
+### Access-control integration tests
+
+Unit tests run with `npm --prefix api test`; frontend tests with
+`npm --prefix frontend test`. To also exercise real HTTP sessions, migrations,
+CRUD, access boundaries and concurrent role changes, create **two empty,
+disposable MySQL databases**, then run:
+
+```bash
+TEST_DB_NAME=opengym_test_activation TEST_ADMIN_DB_NAME=opengym_test_admin npm --prefix api test
+```
+
+Database names must start with `opengym_test_`. Each suite refuses a nonempty
+database; the tests never connect to the application database through these
+variables. Standard `DB_HOST`, `DB_PORT`, `DB_USER` and `DB_PASSWORD` configure
+the test server connection. Use fresh databases for subsequent runs.

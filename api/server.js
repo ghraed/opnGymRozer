@@ -1,3 +1,5 @@
+import { isStaff, canViewUser, publicUser } from './access.js'
+import { manageUser } from './admin-users.js'
 import http from 'node:http'
 import https from 'node:https'
 import crypto from 'node:crypto'
@@ -21,7 +23,6 @@ webpush.setVapidDetails(process.env.VAPID_SUBJECT || (SECURE ? ORIGIN : 'mailto:
 // on slower connections. Keep IPv4/IPv6 fallback, but allow each attempt 2 s.
 const pushAgent = new https.Agent({ autoSelectFamilyAttemptTimeout: 2000 })
 
-const publicUser = u => ({ id: u.id, name: u.name, role: u.role, admin: u.role === 'trainer', activated: u.role === 'trainer' || !!u.activated })
 const sessionVersion = u => Number(u.session_version) || 0
 const sign = p => p + '.' + crypto.createHmac('sha256', SECRET).update(p).digest('base64url')
 const makeSession = u => sign(`${u.id}:${Date.now() + SESSION_DAYS * 86400000}:${sessionVersion(u)}`)
@@ -44,11 +45,11 @@ async function readSession(req) {
 async function requireSession(req, res) { const u = await readSession(req); if (!u) json(res, 401, { error: 'not signed in' }); return u }
 async function requireUser(req, res, { allowSetup = false } = {}) {
   const u = await requireSession(req, res)
-  if (u && u.role !== 'trainer' && !u.activated) {
+  if (u && !isStaff(u) && !u.activated) {
     json(res, 403, { error: 'Waiting for your trainer to activate your account', code: 'ACCOUNT_PENDING' })
     return null
   }
-  if (u && u.role !== 'trainer' && !allowSetup) {
+  if (u && !isStaff(u) && !allowSetup) {
     const { state } = await readClientState(pool, u.id)
     if (!profileComplete(state?.onboarding)) {
       json(res, 403, { error: 'Complete your fitness profile before continuing', code: 'PROFILE_REQUIRED' })
@@ -57,7 +58,9 @@ async function requireUser(req, res, { allowSetup = false } = {}) {
   }
   return u
 }
-async function requireTrainer(req, res) { const u = await requireUser(req, res); if (u && u.role !== 'trainer') { json(res, 403, { error: 'trainer access required' }); return null } return u }
+async function requireTrainer(req, res) { const u = await requireUser(req, res); if (u && !isStaff(u)) { json(res, 403, { error: 'trainer access required' }); return null } return u }
+
+async function requireAdmin(req, res) { const u = await requireSession(req, res); if (u && u.role !== 'admin') { json(res, 403, { error: 'admin access required' }); return null } return u }
 
 const emailOf = value => String(value || '').trim().toLowerCase()
 const validEmail = email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254
@@ -98,10 +101,10 @@ setInterval(async () => {
   if (reminderScanRunning) return
   reminderScanRunning = true
   try {
-    const [rows] = await pool.query('SELECT u.id,u.role,u.last_reminder_date,s.settings_json,s.plan_json,s.progress_json FROM users u JOIN client_states s ON s.user_id=u.id WHERE u.disabled=0 AND (u.activated=1 OR u.role=\'trainer\')')
+    const [rows] = await pool.query('SELECT u.id,u.role,u.last_reminder_date,s.settings_json,s.plan_json,s.progress_json FROM users u JOIN client_states s ON s.user_id=u.id WHERE u.disabled=0 AND (u.activated=1 OR u.role IN (\'trainer\',\'admin\'))')
     for (const row of rows) {
       const settings = parseJson(row.settings_json), plan = parseJson(row.plan_json), progress = parseJson(row.progress_json), now = userNow(settings.reminder?.tz || 'UTC')
-      if (row.role !== 'trainer' && !profileComplete(settings.onboarding)) continue
+      if (!isStaff(row) && !profileComplete(settings.onboarding)) continue
       const lastReminder = row.last_reminder_date instanceof Date ? row.last_reminder_date.toISOString().slice(0, 10) : String(row.last_reminder_date || '').slice(0, 10)
       if (!settings.reminder?.on || !now || settings.reminder.time !== now.time || lastReminder === now.date || (progress.workouts || []).some(w => w.d === now.date)) continue
       const rid = effectiveRoutineId(plan, now.date); if (!rid || !(await subscriptions(row.id)).length) continue
@@ -141,7 +144,7 @@ const routes = {
   'POST /api/logout': async (req, res) => json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }),
   'POST /api/logout/all': async (req, res) => { const u = await requireSession(req, res); if (u) { await pool.execute('UPDATE users SET session_version=session_version+1 WHERE id=?', [u.id]); json(res, 200, { ok: true }, { 'Set-Cookie': clearCookie }) } },
   'GET /api/data': async (req, res) => { const u = await requireUser(req, res, { allowSetup: true }); if (u) json(res, 200, await readClientState(pool, u.id)) },
-  'PUT /api/data': async (req, res) => { const u = await requireUser(req, res, { allowSetup: true }); if (!u) return; const b = await readBody(req); if (!b.state || typeof b.state !== 'object') return json(res, 400, { error: 'state required' }); if (u.role !== 'trainer' && !profileComplete(b.state.onboarding)) return json(res, 403, { error: 'Complete your fitness profile before continuing', code: 'PROFILE_REQUIRED' }); delete b.state.active; json(res, 200, await saveClientState(pool, u, b.state, b.revisions || {})) },
+  'PUT /api/data': async (req, res) => { const u = await requireUser(req, res, { allowSetup: true }); if (!u) return; const b = await readBody(req); if (!b.state || typeof b.state !== 'object') return json(res, 400, { error: 'state required' }); if (!isStaff(u) && !profileComplete(b.state.onboarding)) return json(res, 403, { error: 'Complete your fitness profile before continuing', code: 'PROFILE_REQUIRED' }); delete b.state.active; json(res, 200, await saveClientState(pool, u, b.state, b.revisions || {})) },
   'GET /api/push/public-key': async (req, res) => json(res, 200, { key: vapid.publicKey }),
   'POST /api/push/subscribe': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const sub = (await readBody(req)).subscription; if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return json(res, 400, { error: 'invalid subscription' }); await pool.execute('INSERT INTO push_subscriptions(user_id,endpoint_hash,endpoint,keys_json) VALUES (?,UNHEX(SHA2(?,256)),?,?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),keys_json=VALUES(keys_json)', [u.id, sub.endpoint, sub.endpoint, JSON.stringify(sub.keys)]); json(res, 200, { ok: true }) },
   'POST /api/push/unsubscribe': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const b = await readBody(req); await pool.execute('DELETE FROM push_subscriptions WHERE user_id=? AND endpoint_hash=UNHEX(SHA2(?,256))', [u.id, b.endpoint || '']); json(res, 200, { ok: true }) },
@@ -151,16 +154,16 @@ const routes = {
   'POST /api/activity': async (req, res) => { const u = await requireUser(req, res); if (!u) return; const b = await readBody(req); if (b.active) presence.set(u.id, { name: String(b.name || '').slice(0, 60), exIdx: +b.exIdx || 0, exTotal: +b.exTotal || 0, setsDone: +b.setsDone || 0, setsTotal: +b.setsTotal || 0, startedAt: +b.startedAt || Date.now(), updatedAt: Date.now() }); else presence.delete(u.id); json(res, 200, { ok: true }) },
 
   'GET /api/admin/users': async (req, res) => {
-    if (!(await requireTrainer(req, res))) return
+    const actor = await requireTrainer(req, res); if (!actor) return
     const [users] = await pool.query('SELECT u.*,s.client_timestamp,s.progress_json,EXISTS(SELECT 1 FROM push_subscriptions p WHERE p.user_id=u.id) has_push FROM users u LEFT JOIN client_states s ON s.user_id=u.id ORDER BY u.name')
-    json(res, 200, { users: users.map(u => { const p = parseJson(u.progress_json), w = p.workouts || [], last = w[w.length - 1]; return { id: u.id, name: u.name, created: u.created_at, disabled: !!u.disabled, activated: u.role === 'trainer' || !!u.activated, role: u.role, admin: u.role === 'trainer', workouts: w.length, lastWorkout: last?.d || null, lastSync: Number(u.client_timestamp) || null, hasPush: !!u.has_push, live: livePresence(u.id) } }), invite_only: INVITE_ONLY, now: Date.now() })
+    json(res, 200, { users: users.filter(u => canViewUser(actor, u)).map(u => { const p = parseJson(u.progress_json), w = p.workouts || [], last = w[w.length - 1]; return { id: u.id, name: u.name, ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled, activated: isStaff(u) || !!u.activated, role: u.role, admin: isStaff(u), workouts: w.length, lastWorkout: last?.d || null, lastSync: Number(u.client_timestamp) || null, hasPush: !!u.has_push, live: livePresence(u.id) } }), invite_only: INVITE_ONLY, now: Date.now() })
   },
   'GET /api/admin/user': async (req, res) => {
-    if (!(await requireTrainer(req, res))) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u) return json(res, 404, { error: 'no such user' })
-    const data = await readClientState(pool, id), S = data.state || {}; json(res, 200, { user: { ...publicUser(u), created: u.created_at, disabled: !!u.disabled, invitedBy: u.invited_by }, unit: S.unit || 'kg', profileImage: S.profileImage || null, lastSync: S._ts || null, routines: S.routines || [], bodyweight: S.bodyweight || [], workouts: (S.workouts || []).slice().reverse(), customEx: S.customEx || [], plan: { routines: S.routines || [], week: S.week || {}, dayPlan: S.dayPlan || {}, customEx: S.customEx || [] }, revisions: data.revisions })
+    const actor = await requireTrainer(req, res); if (!actor) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u || !canViewUser(actor, u)) return json(res, 404, { error: 'no such user' })
+    const data = await readClientState(pool, id), S = data.state || {}; json(res, 200, { user: { ...publicUser(u), ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled, invitedBy: u.invited_by }, onboarding: S.onboarding || null, unit: S.unit || 'kg', profileImage: S.profileImage || null, lastSync: S._ts || null, routines: S.routines || [], bodyweight: S.bodyweight || [], workouts: (S.workouts || []).slice().reverse(), customEx: S.customEx || [], plan: { routines: S.routines || [], week: S.week || {}, dayPlan: S.dayPlan || {}, customEx: S.customEx || [] }, revisions: data.revisions })
   },
-  'GET /api/admin/client/state': async (req, res) => { if (!(await requireTrainer(req, res))) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u) return json(res, 404, { error: 'no such user' }); json(res, 200, { user: publicUser(u), ...(await readClientState(pool, id)) }) },
-  'PUT /api/admin/client/plan': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req), u = await getUser(pool, b.id); if (!u || u.role !== 'client') return json(res, 404, { error: 'no such client' }); json(res, 200, await saveTrainerPlan(pool, t, u.id, b.plan, b.baseVersion)) },
+  'GET /api/admin/client/state': async (req, res) => { const actor = await requireTrainer(req, res); if (!actor) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u || !canViewUser(actor, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, { user: publicUser(u), ...(await readClientState(pool, id)) }) },
+  'PUT /api/admin/client/plan': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req), u = await getUser(pool, b.id); if (!u || !canViewUser(t, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, await saveTrainerPlan(pool, t, u.id, b.plan, b.baseVersion)) },
   'POST /api/admin/user/activate': async (req, res) => {
     if (!(await requireTrainer(req, res))) return
     const b = await readBody(req), u = await getUser(pool, b.id)
@@ -170,11 +173,16 @@ const routes = {
     json(res, 200, { ok: true, id: u.id, activated: true })
   },
   'POST /api/admin/user/disable': async (req, res) => {
-    if (!(await requireTrainer(req, res))) return
+    const actor = await requireTrainer(req, res); if (!actor) return
     const b = await readBody(req)
     if (typeof b.disabled !== 'boolean') return json(res, 400, { error: 'disabled must be true or false' })
     const u = await getUser(pool, b.id)
     if (!u) return json(res, 404, { error: 'no such client' })
+    if (actor.role === 'admin') {
+      await manageUser(pool, actor, { id: b.id, disabled: b.disabled }, 'update')
+      presence.delete(b.id); clearTimeout(restTimers.get(b.id)); restTimers.delete(b.id)
+      return json(res, 200, { ok: true, id: b.id, disabled: b.disabled })
+    }
     if (u.role !== 'client') return json(res, 400, { error: 'cannot disable a trainer' })
     const [result] = await pool.execute("UPDATE users SET disabled=?,session_version=session_version+? WHERE id=? AND role='client'", [b.disabled, b.disabled ? 1 : 0, u.id])
     if (!result.affectedRows) return json(res, 409, { error: 'Account changed. Reload and try again.' })
@@ -186,19 +194,34 @@ const routes = {
     json(res, 200, { ok: true, id: u.id, disabled: b.disabled })
   },
   'DELETE /api/admin/user': async (req, res) => {
-    if (!(await requireTrainer(req, res))) return
+    const actor = await requireTrainer(req, res); if (!actor) return
     const b = await readBody(req)
     if (typeof b.id !== 'string' || !b.id) return json(res, 400, { error: 'client id required' })
-    await deleteClientAccount(pool, b.id)
+    if (actor.role === 'admin') await manageUser(pool, actor, b, 'delete')
+    else await deleteClientAccount(pool, b.id)
     presence.delete(b.id)
     clearTimeout(restTimers.get(b.id))
     restTimers.delete(b.id)
     json(res, 200, { ok: true, id: b.id })
   },
+  'POST /api/admin/users': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const id = await manageUser(pool, actor, await readBody(req), 'create')
+    json(res, 201, { user: publicUser(await getUser(pool, id)) })
+  },
+  'PUT /api/admin/user': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const b = await readBody(req)
+    const id = await manageUser(pool, actor, b, 'update')
+    presence.delete(id); clearTimeout(restTimers.get(id)); restTimers.delete(id)
+    json(res, 200, { user: publicUser(await getUser(pool, id)) }, id === actor.id ? { 'Set-Cookie': sessionCookie(await getUser(pool, id)) } : {})
+  },
   'POST /api/admin/user/role': async (req, res) => {
-    const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req), role = b.role === 'trainer' ? 'trainer' : 'client', u = await getUser(pool, b.id); if (!u) return json(res, 404, { error: 'no such user' }); if (u.id === t.id && role !== 'trainer') return json(res, 400, { error: 'cannot demote yourself' })
-    if (u.role === 'trainer' && role !== 'trainer') { const [[c]] = await pool.query("SELECT COUNT(*) total FROM users WHERE role='trainer'"); if (+c.total <= 1) return json(res, 400, { error: 'cannot remove the final trainer' }) }
-    await pool.execute('UPDATE users SET role=?,activated=TRUE WHERE id=?', [role, u.id]); json(res, 200, { ok: true, id: u.id, role })
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const b = await readBody(req)
+    if (!['client', 'trainer', 'admin'].includes(b.role)) return json(res, 400, { error: 'invalid role' })
+    const id = await manageUser(pool, actor, { id: b.id, role: b.role }, 'update')
+    json(res, 200, { ok: true, id, role: b.role })
   },
   'GET /api/admin/invites': async (req, res) => { if (!(await requireTrainer(req, res))) return; const [rows] = await pool.query('SELECT i.*,u.name used_by_name FROM invites i LEFT JOIN users u ON u.id=i.used_by ORDER BY i.created_at DESC'); json(res, 200, { invites: rows.map(i => ({ code: i.code, note: i.note, createdBy: i.created_by, usedBy: i.used_by, usedByName: i.used_by_name, created: i.created_at, usedAt: i.used_at, revoked: !!i.revoked_at })), invite_only: INVITE_ONLY }) },
   'POST /api/admin/invites/new': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req); let code; do { code = crypto.randomBytes(8).toString('hex').toUpperCase() } while (await inviteIsOpen(code)); await pool.execute('INSERT INTO invites(code,note,created_by) VALUES (?,?,?)', [code, String(b.note || '').slice(0, 60), t.id]); json(res, 200, { invite: { code, note: b.note || '', createdBy: t.id, created: new Date().toISOString() } }) },

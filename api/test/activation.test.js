@@ -189,7 +189,7 @@ test('trainer activation protects new clients while preserving existing accounts
     assert.equal((await request('/api/admin/user?id=' + id, { cookie: trainer.cookie })).status, 404)
     assert.equal((await request('/api/admin/user', { cookie: trainer.cookie, method: 'DELETE', body: { id } })).status, 404)
     const listing = await request('/api/admin/users', { cookie: trainer.cookie })
-    assert.ok(listing.data.users.some(u => u.id === 'trainer'))
+    assert.ok(!listing.data.users.some(u => u.id === 'trainer'))
     assert.ok(!listing.data.users.some(u => u.id === id))
   })
 

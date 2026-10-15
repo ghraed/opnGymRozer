@@ -1615,3 +1615,10 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .trainer-custom-form label{display:grid;gap:8px;margin-top:14px;font-size:13px;color:var(--label-2)}
 .trainer-custom-form .input{width:100%;min-height:48px;padding:12px;border:1px solid var(--sep);border-radius:10px;box-sizing:border-box;background:var(--surface-2);color:var(--label)}
 .trainer-custom-form .trainer-plan-tools{margin-bottom:0}
+
+.account-editor { margin-top: 12px; }
+.account-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.account-editor label { display: block; margin: 12px 0; font-size: .875rem; }
+.account-editor label.row { display: flex; gap: 8px; align-items: center; }
+.account-editor .input { display: block; width: 100%; margin-top: 5px; min-height: 44px; box-sizing: border-box; }
+.account-profile-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
