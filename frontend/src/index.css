@@ -1615,3 +1615,32 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .trainer-custom-form label{display:grid;gap:8px;margin-top:14px;font-size:13px;color:var(--label-2)}
 .trainer-custom-form .input{width:100%;min-height:48px;padding:12px;border:1px solid var(--sep);border-radius:10px;box-sizing:border-box;background:var(--surface-2);color:var(--label)}
 .trainer-custom-form .trainer-plan-tools{margin-bottom:0}
+
+.account-editor { margin-top: 12px; }
+.account-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.account-editor label { display: block; margin: 12px 0; font-size: .875rem; }
+.account-editor label.row { display: flex; gap: 8px; align-items: center; }
+.account-editor .input { display: block; width: 100%; margin-top: 5px; min-height: 44px; box-sizing: border-box; }
+.account-profile-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
+
+.membership-entry { display: flex; align-items: center; justify-content: space-between; gap: 12px; text-decoration: none; color: inherit; }
+.membership-entry h2, .membership-plans h1, .membership-plan h2 { margin: 0; overflow-wrap: anywhere; }
+.membership-entry p, .membership-plans .hdr p { margin: 6px 0 0; }
+.membership-plans .hdr { gap: 10px; }
+.membership-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+.membership-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; }
+.membership-grid .card { margin: 0; min-width: 0; }
+.membership-plan { display: flex; flex-direction: column; align-items: stretch; }
+.membership-plan .row { gap: 10px; align-items: flex-start; }
+.membership-plan .tag { flex-shrink: 0; }
+.membership-price { font-size: clamp(1.2rem, 5vw, 1.75rem); font-weight: 700; margin: 18px 0 2px; overflow-wrap: anywhere; }
+.membership-description { white-space: pre-wrap; overflow-wrap: anywhere; margin: 14px 0 20px; }
+.membership-plan .client-account-actions { margin-top: auto; padding-top: 16px; }
+.membership-filters, .membership-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.membership-filters label, .membership-field-grid label { min-width: 0; font-size: .875rem; }
+.membership-filters .input { display: block; width: 100%; min-height: 44px; margin-top: 5px; box-sizing: border-box; }
+.membership-editor textarea { resize: vertical; }
+@media (max-width: 420px) { .membership-filters { grid-template-columns: 1fr; } }
+.membership-toolbar > .btn { width: auto; flex-shrink: 0; }
+.membership-plan .client-account-actions { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+.membership-plan .client-account-actions > .btn { flex: 1; width: auto; min-height: 44px; padding: 10px 12px; font-size: 15px; }

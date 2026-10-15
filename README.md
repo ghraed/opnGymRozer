@@ -229,3 +229,114 @@ if you run a modified version as a network service, you must offer that version'
 the same license. Nobody can turn openGym into a closed, proprietary product.
 
 Exercise images/GIFs are fetched from the upstream dataset and keep their own terms — see [NOTICE.md](NOTICE.md).
+
+## Admin and trainer accounts
+
+There are three separate roles: `client`, `trainer`, and `admin`. Existing
+trainers remain trainers after migration; nobody is automatically promoted.
+The API applies `004_admin_role.sql` at startup, preserving accounts and data.
+
+Admins use the **Admin** tab (`/admin`) to search all users, including trainers
+and other admins, create accounts, and open profiles. **Edit user profile**
+updates name, email, password, role, photo, activation and fitness information.
+The profile also exposes training-plan editing, account suspension/restoration
+and confirmed permanent deletion. New accounts created by an admin default to
+activated; the admin can leave a client pending. Clients without a completed
+fitness profile must finish setup before logging workouts.
+
+Trainers keep the client dashboard, plan editing, activation, suspension and
+client deletion, but cannot access trainer/admin profiles, create accounts or
+change roles. Public registration always creates pending clients regardless of
+role fields supplied by a caller. Role, identity, password and access changes
+revoke the affected user's sessions; editing your own admin profile refreshes
+your current session. Admins cannot delete, suspend or demote themselves; account
+mutations are serialized to prevent concurrent changes removing all enabled admins.
+
+### Bootstrap the first admin
+
+Run this on the server with the normal database environment, after deploying the
+`finance` branch. Supply the email of an existing account to promote it without
+changing its profile or password:
+
+```bash
+ADMIN_EMAIL='owner@example.com' npm --prefix api run db:seed-admin
+```
+
+To create a new account, also supply `ADMIN_PASSWORD` (8–200 characters) and,
+optionally, `ADMIN_NAME`. Keep the password out of source control and shell
+history; for example, enter it through a hidden prompt:
+
+```bash
+read -rs -p 'Admin password: ' ADMIN_PASSWORD
+export ADMIN_PASSWORD
+ADMIN_EMAIL='owner@example.com' ADMIN_NAME='Owner' npm --prefix api run db:seed-admin
+unset ADMIN_PASSWORD
+```
+
+Docker deployments can use the dedicated tools service; rebuild it from this
+branch and pass the target email (and password only for a new account/reset):
+
+```bash
+docker compose --profile tools build seed-admin
+docker compose --profile tools run --rm -e ADMIN_EMAIL='owner@example.com' seed-admin
+```
+
+No default admin password is shipped. The trainer seed command refuses to
+overwrite an admin account. Sign in again after promoting an existing account.
+
+### Access-control integration tests
+
+Unit tests run with `npm --prefix api test`; frontend tests with
+`npm --prefix frontend test`. To also exercise real HTTP sessions, migrations,
+CRUD, access boundaries and concurrent role changes, create **two empty,
+disposable MySQL databases**, then run:
+
+```bash
+TEST_DB_NAME=opengym_test_activation TEST_ADMIN_DB_NAME=opengym_test_admin npm --prefix api test
+```
+
+Database names must start with `opengym_test_`. Each suite refuses a nonempty
+database; the tests never connect to the application database through these
+variables. Standard `DB_HOST`, `DB_PORT`, `DB_USER` and `DB_PASSWORD` configure
+the test server connection. Use fresh databases for subsequent runs.
+
+## Membership plans and pricing
+
+Open **Admin → Membership plans** (`/#/admin/memberships`). Only admins can
+access this page and its API. Create and edit plans with a name, description /
+benefits, duration (days, weeks, months or years), total price and currency
+(USD or LBP). A price of zero is allowed. Prices are entered explicitly; no
+sample or default prices are installed. Each plan is priced in one currency,
+without automatic exchange-rate conversion. Create separate plans when offering
+prices in both currencies.
+
+Archive unused plans and restore them later. Archived plans and their prices
+remain saved; there is no destructive plan deletion. Search by name, description
+or currency, and switch between active, archived and all plans. Edits and status
+changes include a version so concurrent admin actions cannot silently overwrite
+each other. A conflict requires canceling and reopening the plan to use its latest
+version.
+
+Migration `005_membership_plans.sql` adds a separate catalog table at API startup
+without modifying existing users or workout plans. Monetary values use
+`DECIMAL(12,2)` and are returned as two-decimal strings. The total price is for the
+entire stated duration; duration units are retained (a calendar month is not
+converted to 30 days).
+
+| Method | Endpoint | Action |
+| --- | --- | --- |
+| GET | `/api/admin/membership-plans` | List all plans, including archived plans |
+| POST | `/api/admin/membership-plans` | Create a plan |
+| PUT | `/api/admin/membership-plan` | Edit a plan with its `id` and `version` |
+| POST | `/api/admin/membership-plan/status` | Set `active` with its `id` and `version` |
+
+Create/update bodies use `name`, `description`, `durationCount` (integer 1–3650),
+`durationUnit` (`day`, `week`, `month`, `year`), `price` (decimal string, maximum
+9999999999.99) and `currency` (`USD`, `LBP`). New plans start active. This step is
+the pricing catalog only: assigning memberships to members, renewals, billing,
+payment collection and workout access restrictions are separate features.
+
+To include the membership HTTP/integration suite, supply a third **empty,
+disposable** database using `TEST_MEMBERSHIP_DB_NAME=opengym_test_memberships`
+when running the API tests. The suite verifies upgrading an existing database,
+access controls, exact prices, validation, archive/restore and concurrent edits.

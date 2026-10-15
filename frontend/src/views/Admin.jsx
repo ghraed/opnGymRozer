@@ -1,3 +1,4 @@
+import AccountEditor from '../components/AccountEditor.jsx'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -8,7 +9,7 @@ import { fmtDate } from '../lib/format.js'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
-// Admin-only operator dashboard (owner session + admin flag; guarded again server-side).
+// Staff dashboard; admin-only user management is also guarded server-side.
 // Deliberately English-only — it isn't part of the translated end-user surface, so it stays
 // out of the per-language string packs.
 
@@ -50,6 +51,8 @@ function InvitesCard({ invites, reload }) {
 export default function Admin() {
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
+  const isAdmin = user?.role === 'admin'
+  const [creating, setCreating] = useState(false)
   const [users, setUsers] = useState(null)
   const [invites, setInvites] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
@@ -71,7 +74,7 @@ export default function Admin() {
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const pendingCount = (users || []).filter(u => needsActivation(u) && !u.disabled).length
   const visibleUsers = (users || [])
-    .filter(u => u.name.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))
+    .filter(u => [u.name, u.email, u.role].some(value => value?.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())))
     .sort((a, b) => {
       const aPending = needsActivation(a) && !a.disabled
       const bPending = needsActivation(b) && !b.disabled
@@ -85,7 +88,7 @@ export default function Admin() {
 
   return <div className="narrow">
     <div className="hdr admin-hdr">
-      <div className="admin-title"><h1>Trainer dashboard</h1>
+      <div className="admin-title"><h1>{isAdmin ? 'Admin dashboard' : 'Trainer dashboard'}</h1>
         <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
       <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
     </div>
@@ -106,17 +109,20 @@ export default function Admin() {
       </Link>)}
     </div>}
 
+    {isAdmin && <Link className="card membership-entry" to="/admin/memberships"><div><h2>Membership plans</h2><p className="small muted">Manage gym packages, duration and pricing</p></div><Icon name="chevronRight" /></Link>}
     <InvitesCard invites={invites} reload={loadInvites} />
 
-    <h4 className="sec">Clients</h4>
+    {isAdmin && <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>Create user</Button>}
+    {creating && isAdmin && <AccountEditor onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); toast('User created'); loadUsers() }} />}
+    <h4 className="sec">{isAdmin ? 'All users' : 'Clients'}</h4>
     <div className="admin-search">
       <Icon name="magnifier" />
-      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search clients" aria-label="Search clients" />
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder={isAdmin ? 'Search name, email or role' : 'Search clients'} aria-label="Search users" />
       {search && <button onClick={() => setSearch('')} aria-label="Clear search"><Icon name="xmark" /></button>}
     </div>
     <div className="list">
       {visibleUsers.map(u => <Link key={u.id} to={'/admin/clients/' + encodeURIComponent(u.id)} state={{ fromTrainer: true }} className="item admin-client-link" style={u.disabled ? { opacity: .55 } : null}>
-          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {needsActivation(u) && !u.disabled && <span className="tag acc">Pending activation</span>}{u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>trainer</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
+          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {needsActivation(u) && !u.disabled && <span className="tag acc">Pending activation</span>}{u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>{u.role}</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
           <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · synced ' + rel(u.lastSync)}</div></div>
         {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
       </Link>)}

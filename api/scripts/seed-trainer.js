@@ -14,9 +14,10 @@ await migrate(pool)
 const conn = await pool.getConnection()
 try {
   await conn.beginTransaction()
-  const [rows] = await conn.execute('SELECT id FROM users WHERE email=? FOR UPDATE', [email])
+  const [rows] = await conn.execute('SELECT id,role FROM users WHERE email=? FOR UPDATE', [email])
   let id
   if (rows.length) {
+    if (rows[0].role === 'admin') throw new Error('Use db:seed-admin to manage an admin account')
     id = rows[0].id
     await conn.execute('UPDATE users SET name=?,role=\'trainer\',disabled=FALSE,password_hash=?,session_version=session_version+1 WHERE id=?', [name, hashPassword(password), id])
   } else {

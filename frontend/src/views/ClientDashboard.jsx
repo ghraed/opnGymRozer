@@ -1,3 +1,4 @@
+import AccountEditor from '../components/AccountEditor.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
@@ -175,6 +176,8 @@ export default function ClientDashboard() {
   const navigate = useNavigate()
   const viewer = useStore(s => s.user)
   const toast = useUI(s => s.toast)
+  const isAdmin = viewer?.role === 'admin'
+  const [editingAccount, setEditingAccount] = useState(false)
   const [detail, setDetail] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -203,7 +206,7 @@ export default function ClientDashboard() {
   }
   const header = <header className="hdr client-header">
     <button className="iconbtn" onClick={back} aria-label={editing ? 'Back to client dashboard' : 'Back to clients'}><Icon name="chevronLeft" /></button>
-    <div className="grow"><div className="small muted">Trainer / {editing ? 'Client plan' : 'Client overview'}</div><h1>{editing ? 'Edit plan' : 'Client dashboard'}</h1></div>
+    <div className="grow"><div className="small muted">{isAdmin ? 'Admin' : 'Trainer'} / {editing ? 'Training plan' : 'Profile overview'}</div><h1>{editing ? 'Edit plan' : isAdmin ? 'User profile' : 'Client dashboard'}</h1></div>
     {!editing && <button className="iconbtn" onClick={reload} disabled={loading || pending} aria-label="Refresh client dashboard">↻</button>}
   </header>
 
@@ -240,11 +243,10 @@ export default function ClientDashboard() {
     setPending(true)
     try {
       await api('/api/admin/user', { method: 'DELETE', body: JSON.stringify({ id: u.id }) })
-      toast('Client account deleted')
+      toast('User account deleted')
       navigate('/admin', { replace: true })
     } catch (e) { toast(e.message); setPending(false) }
   }
-  const setRole = role => changeAccount('/api/admin/user/role', { role }, role === 'trainer' ? 'Trainer access granted' : 'Trainer access removed')
 
   return <main className="client-dashboard">{header}
     {error && <div className="card" role="alert"><p>{error}</p><Button size="sm" onClick={reload}>Try again</Button></div>}
@@ -252,13 +254,16 @@ export default function ClientDashboard() {
       <div className="client-identity">
         <ProfileAvatar value={detail.profileImage} name={u.name} className="client-avatar" viewable />
         <div className="grow"><h2 id="client-name" className="capitalize">{u.name}</h2>
-          <div className="client-badges"><span className="tag acc">{u.admin ? 'Trainer' : 'Client'}</span><span className={'tag' + (u.disabled ? ' client-disabled' : '')}>{u.disabled ? 'Account disabled' : needsActivation(u) ? 'Pending activation' : 'Account active'}</span></div>
+          <div className="client-badges"><span className="tag acc">{u.role === 'admin' ? 'Admin' : u.role === 'trainer' ? 'Trainer' : 'Client'}</span><span className={'tag' + (u.disabled ? ' client-disabled' : '')}>{u.disabled ? 'Account disabled' : needsActivation(u) ? 'Pending activation' : 'Account active'}</span></div>
           <p className="small muted">{u.created ? 'Joined ' + fmtDate(u.created.slice(0, 10)) + ' · ' : ''}Synced {rel(detail.lastSync)}</p>
         </div>
       </div>
-      {!u.admin && <Button variant="primary" icon="pencil" disabled={loading || pending} onClick={() => setEditing(true)}>Edit client plan</Button>}
+      {(isAdmin || !u.admin) && <Button variant="primary" icon="pencil" disabled={loading || pending} onClick={() => setEditing(true)}>Edit training plan</Button>}
     </section>
 
+    {isAdmin && <Button onClick={() => setEditingAccount(value => !value)}>Edit user profile</Button>}
+    {editingAccount && isAdmin && <AccountEditor key={u.id + '-' + revision} detail={detail} onCancel={() => setEditingAccount(false)} onSaved={() => { setEditingAccount(false); toast('Profile updated'); reload() }} />}
+    {detail.onboarding && <section className="card"><h2>Fitness profile</h2><dl>{Object.entries(detail.onboarding).filter(([key, value]) => key !== 'completedAt' && value != null && typeof value !== 'object').map(([key, value]) => <div key={key} className="client-row"><dt>{key.replace(/([A-Z])/g, ' $1')}</dt><dd>{String(value).replaceAll('_', ' ')}</dd></div>)}</dl></section>}
     {needsActivation(u) && !u.disabled && <section className="card client-activation" aria-labelledby="activation-title">
       <div><h2 id="activation-title">Waiting for activation</h2><p className="small muted">This client can sign in, but needs your approval to access their plan and log workouts.</p></div>
       <Button variant="primary" disabled={loading || pending} onClick={() => changeAccount('/api/admin/user/activate', {}, 'Client account activated')}>Activate account</Button>
@@ -311,7 +316,7 @@ export default function ClientDashboard() {
     <details className="card client-account">
       <summary>Account settings</summary>
       {u.invitedBy && <p className="small muted">Invited by {u.invitedBy}</p>}
-      {!u.admin && <div className="client-access">
+      {(u.id !== viewer?.id && (isAdmin || !u.admin)) && <div className="client-access">
         <p className="small muted">{u.disabled ? 'This account is disabled. Enable it to allow login again.' : 'Disable access temporarily, or permanently delete this client and their data.'}</p>
         {confirmDelete ? <div className="client-delete-confirm" role="alert">
           <h3>Delete {u.name}'s account?</h3>
@@ -326,11 +331,8 @@ export default function ClientDashboard() {
           <Button disabled={pending || loading} variant="danger" icon="trash" onClick={() => setConfirmDelete(true)}>Delete account</Button>
         </div>}
       </div>}
-      <div className="client-account-actions">
-        {!u.admin && <Button disabled={pending || loading} onClick={() => setRole('trainer')}>Promote to trainer</Button>}
-        {u.admin && u.id !== viewer?.id && <Button disabled={pending || loading} variant="danger" onClick={() => setRole('client')}>Demote to client</Button>}
-        {u.id === viewer?.id && <p className="small muted">You are viewing your own trainer account.</p>}
-      </div>
+      {u.id === viewer?.id && <p className="small muted">You are viewing your own account.</p>}
+
     </details>
   </main>
 }
