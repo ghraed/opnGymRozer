@@ -30,6 +30,7 @@ function PlanEditor({ plan, onSaved, onCancel }) {
     <fieldset disabled={saving}>
       <label>Plan name<input ref={nameInput} className="input" required maxLength={80} placeholder="e.g. Monthly gym access" {...field('name')} /></label>
       <label>Description and included benefits<textarea className="input" rows={3} maxLength={2000} placeholder="Describe what this plan includes" {...field('description')} /></label>
+      <div className="finance-presets" aria-label="Plan duration presets">{[['Monthly', 1, 'month'], ['Quarterly', 3, 'month'], ['Yearly', 1, 'year']].map(([label, count, unit]) => <Button type="button" size="sm" key={label} onClick={() => setDraft(d => ({ ...d, durationCount: count, durationUnit: unit }))}>{label}</Button>)}</div>
       <div className="membership-field-grid">
         <label>Duration<input className="input" type="number" required min="1" max="3650" step="1" {...field('durationCount')} /></label>
         <label>Duration unit<select className="input" aria-label="Duration unit" {...field('durationUnit')}><option value="day">Days</option><option value="week">Weeks</option><option value="month">Months</option><option value="year">Years</option></select></label>
@@ -78,7 +79,7 @@ export default function MembershipPlans() {
   })
   const visible = filterMembershipPlans(plans, status, query)
   return <main className="narrow membership-plans">
-    <header className="hdr"><Link className="iconbtn" to="/admin" aria-label="Back to admin"><Icon name="chevronLeft" /></Link><div className="grow"><h1>Membership plans</h1><p className="small muted">Set gym packages, duration and pricing.</p></div><button className="iconbtn" aria-label="Refresh membership plans" disabled={loading || !!pending || !!editor} onClick={reload}>↻</button></header>
+    <header className="hdr"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><h1>Membership plans</h1><p className="small muted">Set gym packages, duration and pricing.</p></div><button className="iconbtn" aria-label="Refresh membership plans" disabled={loading || !!pending || !!editor} onClick={reload}>↻</button></header>
     <div className="membership-toolbar"><span className="small muted">{plans.filter(p => p.active).length} active · {plans.filter(p => !p.active).length} archived</span><Button variant="primary" icon="plus" disabled={!!editor || !!pending || loading || !!error} onClick={() => setEditor({})}>New plan</Button></div>
     {editor && <PlanEditor key={editor.plan?.id || 'new'} plan={editor.plan} onCancel={() => setEditor(null)} onSaved={saved => {
       setPlans(current => [...current.filter(p => p.id !== saved.id), saved].sort((a, b) => a.name.localeCompare(b.name)))

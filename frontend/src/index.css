@@ -1644,3 +1644,72 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .membership-toolbar > .btn { width: auto; flex-shrink: 0; }
 .membership-plan .client-account-actions { flex-direction: row; flex-wrap: wrap; gap: 8px; }
 .membership-plan .client-account-actions > .btn { flex: 1; width: auto; min-height: 44px; padding: 10px 12px; font-size: 15px; }
+
+.finance-page { max-width: 960px; margin: 0 auto; padding: 0 16px 32px; }
+.finance-header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.finance-header .grow { min-width: 0; }
+.finance-header h1 { margin: 4px 0 8px; font-size: clamp(25px, 4vw, 36px); line-height: 1.12; overflow-wrap: anywhere; }
+.finance-header p { margin: 0; line-height: 1.5; }
+.finance-eyebrow { font-size: 10px; letter-spacing: .12em; font-weight: 700; color: var(--label-2); }
+.finance-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.finance-summary .card { min-width: 0; }
+.finance-summary strong { display: block; font-size: 30px; margin-top: 12px; }
+.finance-section-title { margin: 28px 0 8px; font-size: 23px; }
+.finance-feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0; }
+.finance-feature { display: flex; flex-direction: column; margin: 0; padding: 24px; min-width: 0; }
+.finance-feature-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.finance-step { font-size: 24px; font-weight: 700; color: var(--acc); }
+.finance-feature h3 { margin: 0; font-size: 22px; line-height: 1.3; }
+.finance-feature p, .finance-guide li, .finance-note p { line-height: 1.65; }
+.finance-feature ul { padding-left: 20px; margin: 6px 0 18px; line-height: 1.7; }
+.finance-feature li + li { margin-top: 6px; }
+.finance-access { padding: 14px; border-radius: 12px; background: var(--surface-2); }
+.finance-access p { margin: 7px 0 0; font-size: 13px; }
+.finance-feature > .btn { margin-top: auto; text-decoration: none; box-sizing: border-box; min-height: 46px; }
+.finance-guide h2, .finance-note h2 { font-size: 20px; color: var(--label); margin: 0 0 12px; }
+.finance-guide ol { margin: 0; padding-left: 22px; }
+.finance-guide li + li { margin-top: 12px; }
+.finance-note { border: 1px solid var(--sep); }
+.finance-presets { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.finance-form-note { padding: 12px; background: var(--surface-2); border-radius: 10px; line-height: 1.5; }
+.finance-quote { background: var(--surface-2); border-radius: 12px; padding: 16px; }
+.finance-quote strong { display: block; font-size: 24px; margin-top: 8px; }
+.subscription-list { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.subscription-card { min-width: 0; margin: 0; }
+.subscription-card .row { gap: 12px; align-items: flex-start; }
+.subscription-card h2 { font-size: 19px; margin: 0; color: var(--label); overflow-wrap: anywhere; }
+.subscription-card .small, .subscription-plan, .subscription-notes { overflow-wrap: anywhere; }
+.finance-status { text-transform: capitalize; flex-shrink: 0; }
+.finance-status.active { color: var(--green); background: var(--acc-soft); }
+.finance-status.cancelled, .finance-status.expired { color: var(--label-2); }
+.subscription-plan { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 18px 0; }
+.subscription-plan > span { color: var(--label-2); font-size: 13px; }
+.subscription-plan > strong:last-child { margin-left: auto; }
+.subscription-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+.subscription-dates dt { font-size: 12px; color: var(--label-2); margin-bottom: 5px; }
+.subscription-dates dd { margin: 0; font-weight: 600; font-size: 14px; }
+.subscription-notes { white-space: pre-wrap; font-size: 14px; }
+.subscription-card .client-account-actions { flex-direction: row; flex-wrap: wrap; }
+.subscription-card .btn { flex: 1 1 100px; width: auto; min-height: 44px; padding: 10px 12px; font-size: 14px; box-sizing: border-box; text-decoration: none; }
+@media (max-width: 680px) {
+  .finance-page { padding: 0 0 24px; }
+  .finance-summary { grid-template-columns: 1fr 1fr; }
+  .finance-feature-grid, .subscription-list { grid-template-columns: 1fr; }
+  .finance-header { flex-wrap: wrap; gap: 10px; }
+  .finance-header > .tag { margin-left: 46px; }
+  .finance-feature { padding: 20px; }
+  .finance-page .membership-toolbar { flex-wrap: wrap; }
+  .finance-page .membership-toolbar > .btn { font-size: 15px; }
+}
+
+.renewal-settings { margin: 16px 0; }
+.renewal-settings > summary, .renewal-history > summary, .renewal-audit > summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-weight: 600; }
+.renewal-audit { margin-top: 16px; border-top: 1px solid var(--sep); }
+.renewal-audit p { line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.renewal-overdue { color: var(--red); }
+.renewal-history { margin-top: 20px; }
+.renewal-history .client-row { align-items: flex-start; }
+.renewal-history .client-row > div { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.membership-notices { max-width: 900px; margin: 0 auto 16px; }
+.membership-notices h2 { font-size: 18px; color: var(--label); }
+.membership-notices p { line-height: 1.6; }

@@ -29,6 +29,10 @@ import Library from './views/Library.jsx'
 import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
 import MembershipPlans from './views/MembershipPlans.jsx'
+import Finance from './views/Finance.jsx'
+import Renewals from './views/Renewals.jsx'
+import MembershipNotices from './components/MembershipNotices.jsx'
+import Subscriptions from './views/Subscriptions.jsx'
 import ClientDashboard from './views/ClientDashboard.jsx'
 
 bindUI(useUI)   // lets the shared controls open sheets without importing the store at module scope
@@ -201,6 +205,7 @@ function Shell() {
           re-mounts the boundary, so the tab bar is always a way out */}
       <div id="app" className="vfade" key={loc.pathname}>
         <ErrorBoundary>
+          <MembershipNotices />
           {!authed ? <Login /> : pendingActivation ? <PendingActivation /> : profileLoading ? <ProfileLoading error={profileLoadError} /> : setupRequired ? (
             <Routes><Route path="/setup/:step" element={<ProfileSetup />} /><Route path="*" element={<Navigate to="/setup/1" replace />} /></Routes>
           ) : (
@@ -214,6 +219,9 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/renewals" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/finance" element={user?.role === 'admin' ? <Finance /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/subscriptions" element={user?.role === 'admin' ? <Subscriptions /> : <Navigate to="/home" replace />} />
               <Route path="/admin/memberships" element={user?.role === 'admin' ? <MembershipPlans /> : <Navigate to="/home" replace />} />
               <Route path="/admin/clients/:id" element={user?.admin ? <ClientDashboard /> : <Navigate to="/home" replace />} />
               <Route path="*" element={<Navigate to="/home" replace />} />

@@ -340,3 +340,140 @@ To include the membership HTTP/integration suite, supply a third **empty,
 disposable** database using `TEST_MEMBERSHIP_DB_NAME=opengym_test_memberships`
 when running the API tests. The suite verifies upgrading an existing database,
 access controls, exact prices, validation, archive/restore and concurrent edits.
+
+## Finance hub and member subscriptions
+
+Admins open **Admin → Finance** (`/#/admin/finance`) for an overview of available
+finance tools, descriptions, direct links, access instructions and a three-step
+getting-started guide. The hub shows active pricing plans and active, scheduled
+and expired subscription counts. Only implemented tools are marked available;
+payments, invoices and receipts are explicitly described as not yet available.
+Trainers and clients cannot open Finance, subscription pages or their APIs.
+
+**Admin → Finance → Member subscriptions** (`/#/admin/subscriptions`) records
+fixed-term monthly (1 calendar month), quarterly (3 calendar months) and yearly
+(12 calendar months) coverage for client accounts. Create an active pricing plan
+with the matching duration first; the plan editor now has Monthly, Quarterly and
+Yearly duration presets. A yearly plan may use either 1 year or 12 months. A
+30-day plan is deliberately not treated as a calendar-month plan. Each period
+uses its own explicitly configured full-term price; quarterly/yearly amounts
+are not inferred by multiplying a monthly price.
+
+Select an enabled client, a period, a matching active plan and a start date.
+Optional notes are saved with the term. Subscriptions retain the agreed plan
+name, exact price and currency independently of future catalog edits or archive
+operations. The API rejects a changed plan version so admins must review the
+new price before proceeding. Client account activation is separate from
+subscription coverage; adding coverage does not activate, suspend or restrict
+workout/login access.
+
+Dates are calendar dates: coverage includes the start date and stops at the
+**start of the displayed end date**. For example, 15 October → 15 November is
+monthly coverage; 31 January → the last day of February uses month-end clamping.
+Leap years and calendar quarters are calculated explicitly, without assuming
+30/90/365-day intervals. Status is calculated as active, scheduled, expired or
+cancelled using the server's finance date. `FINANCE_TIMEZONE` defaults to
+`Asia/Beirut`; set it to an IANA timezone for another business location. Docker
+uses the API's existing `.env` configuration for this setting.
+
+Search by member, plan, currency or period and filter by status. **Add next term**
+opens a new subscription for the same member with a suggested start date at the
+previous end date (or today if the term expired). This is a manual action: no
+automatic renewal or payment collection occurs. Overlapping, non-cancelled
+coverage for the same client is blocked, including simultaneous submissions;
+adjacent terms are allowed. Request keys prevent a retry from creating a second
+term after a lost response.
+
+Admins may cancel active or scheduled terms with a required reason and explicit
+confirmation. Cancellation is immediate, preserves history and does not issue a
+refund. Expired terms cannot be cancelled. Subscriptions are not deleted when a
+member account or catalog plan is deleted; nullable references and saved names /
+prices retain the historical record. A deleted member's email is not retained in
+subscription snapshots. Migration `006_member_subscriptions.sql` creates this
+separate table without editing existing users, plans or workout history.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/finance` | Admin-only finance overview |
+| GET | `/api/admin/subscriptions` | Subscription records, business date and supported periods |
+| POST | `/api/admin/subscriptions` | Create coverage using `memberId`, `planId`, `planVersion`, `cycle`, `startsOn`, `requestKey`, optional `notes` |
+| POST | `/api/admin/subscription/cancel` | Cancel using `id`, `version` and required `reason` |
+
+For the new integration suite, provide a fourth **empty, disposable** database
+with `TEST_SUBSCRIPTION_DB_NAME=opengym_test_subscriptions`. Run alongside
+`TEST_DB_NAME`, `TEST_ADMIN_DB_NAME` and `TEST_MEMBERSHIP_DB_NAME` for all API
+checks. Each suite requires its own fresh test database. Calendar/date and input
+validation tests also run without a database.
+
+## Renewal tracking and payment reminders
+
+Open **Admin → Finance → Renewals & payment reminders** (`/#/admin/renewals`).
+The tracker lists expiring memberships, overdue renewals, terms with a next term
+recorded and manually reviewed unpaid subscriptions. Use search and status
+filters, review payment, follow **Add next term**, or send a renewal/payment
+reminder. A next term is any later non-cancelled term for the same member; “Next
+term recorded” does not imply gap-free coverage or that its payment is settled.
+
+Migration `007_renewal_reminders.sql` defaults **all existing subscriptions to
+“Not reviewed”**, without inventing historical debt. Admins review each term as
+Not reviewed, Awaiting payment, Paid or Waived / no payment due. Awaiting payment
+requires a due date and a nonzero quoted price. Every review requires a note,
+checks the subscription version and appends an audit record. Only the full-term
+payment status is tracked; this does not charge money or provide a transaction
+ledger, partial payments, refunds, invoices or receipts.
+
+**Manual reminders** require an explicit admin action and confirmation. A member
+gets a private in-app reminder; if they have an existing push subscription, the
+API also attempts a push notification. The push preview is generic; the app
+shows the member's own plan name, agreed amount/currency and due/end date.
+Members can dismiss their own reminders. Clients and trainers cannot view the
+admin tracker, payment review history, settings or other members' notices. A
+client's own reminders do not grant access to any Finance management page.
+
+Under **Automatic reminder settings**, admins can enable recurring follow-ups.
+Automatic reminders are off by default. Defaults are 7 days before membership
+expiry, 3 days before payment is due and a 7-day repeat interval for unresolved
+items. Lead times are configurable from 0–60 days; repeats from 1–30 days. The
+API scans every minute, using `FINANCE_TIMEZONE` / the same calendar date as the
+subscription system. Automatic reminders can start within the lead window or
+when already overdue; they do not auto-renew coverage or collect payments.
+
+Paid, waived or unreviewed terms cannot receive payment reminders. Free terms,
+cancelled terms, disabled/deleted members and accounts no longer assigned the
+client role cannot receive payment reminders. Renewal reminders stop when a
+non-cancelled next term is recorded; cancellation or an unavailable member also
+suppresses reminders. Jobs re-check eligibility before sending and private
+notices are hidden once resolved. Reviewing a payment does not change login or
+workout access.
+
+Reminder jobs and delivery history are persisted in MySQL. A unique key limits
+each subscription/reminder type to one record per business date. Automatic
+follow-ups also respect the configured repeat interval, including manually sent
+reminders. Conditional claims with a 5-minute lease prevent concurrent workers
+from sending a job at the same time. Failed pushes retry at most 3 attempts,
+15 minutes apart; expired leases can recover after a restart. In-app-only jobs
+are complete without a push subscription. “Push accepted” means acceptance by
+the push service, not delivery to or reading by the person. A crash after push
+acceptance but before the database update can cause an at-least-once retry; the
+stable notification tag helps replace duplicate device notifications.
+
+The tracker displays the latest 100 reminder entries and latest 100 payment
+review events; the full history remains stored. Members see up to 10 applicable,
+unread reminders, checked on page load and every minute. Dismissal is scoped to
+the signed-in member and does not mark another member's notice read.
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/admin/renewals` | Admin-only tracker, settings, delivery and payment review history |
+| POST | `/api/admin/subscription/payment` | Review using `id`, `version`, `paymentStatus`, `dueOn` for unpaid, and `note` |
+| PUT | `/api/admin/reminder-settings` | Save `enabled`, `renewalLeadDays`, `paymentLeadDays`, `repeatDays` |
+| POST | `/api/admin/subscription/remind` | Confirm a manual reminder using subscription `id` and `kind` (`renewal` or `payment`) |
+| GET | `/api/member/reminders` | Signed-in member's own applicable unread notices |
+| POST | `/api/member/reminder/read` | Dismiss the signed-in member's reminder by `id` |
+
+Use a fifth fresh disposable database with
+`TEST_RENEWAL_DB_NAME=opengym_test_renewals` for the new integration suite.
+Tests simulate push acceptance/failure locally; they do not contact push
+providers or send real member messages. Existing-data migration, admin-only
+management, member isolation, review history, scheduling/cooldown, paid/renewed
+suppression, retry caps, expired leases and concurrent claims are covered.
