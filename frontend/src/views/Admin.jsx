@@ -6,6 +6,7 @@ import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
 import { needsActivation } from '../lib/activation.js'
 import { fmtDate } from '../lib/format.js'
+import { FINANCE_FEATURES } from '../lib/finance.js'
 import Icon from '../components/Icon.jsx'
 import { Button } from '../components/ui.jsx'
 
@@ -48,6 +49,14 @@ function InvitesCard({ invites, reload }) {
   </div>
 }
 
+function DashboardTool({ to, icon, title, description, meta, featured = false }) {
+  return <Link to={to} className={'admin-tool' + (featured ? ' admin-tool-featured' : '')}>
+    <span className="admin-tool-icon"><Icon name={icon} size={24} /></span>
+    <span className="admin-tool-content"><span className="admin-tool-title">{title}</span><span className="admin-tool-description">{description}</span>{meta && <span className="admin-tool-meta">{meta}</span>}</span>
+    <Icon name="chevronRight" className="admin-tool-arrow" />
+  </Link>
+}
+
 export default function Admin() {
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
@@ -57,6 +66,10 @@ export default function Admin() {
   const [invites, setInvites] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
+  const requestedSection = searchParams.get('section')
+  const section = ['members', 'invites', 'activity'].includes(requestedSection) ? requestedSection : searchParams.has('q') ? 'members' : 'overview'
+  useEffect(() => { window.scrollTo(0, 0) }, [section])
+  const sectionTitle = { members: isAdmin ? 'Members & staff' : 'Clients', invites: 'Invite codes', activity: 'Training activity' }[section]
   const search = searchParams.get('q') || ''
   const setSearch = value => setSearchParams(params => {
     if (value) params.set('q', value)
@@ -86,20 +99,42 @@ export default function Admin() {
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
     })
 
-  return <div className="narrow">
+  return <main className="admin-workspace">
+    {section !== 'overview' && <Link className="admin-back" to="/admin"><Icon name="chevronLeft" />Back to dashboard</Link>}
     <div className="hdr admin-hdr">
-      <div className="admin-title"><h1>{isAdmin ? 'Admin dashboard' : 'Trainer dashboard'}</h1>
-        <div className="sub">{users ? users.length + ' users · ' + activeCount + ' active this week' : 'Loading…'}</div></div>
-      <button className="iconbtn" onClick={() => { loadUsers(); loadInvites() }} aria-label="refresh">↻</button>
+      <div className="admin-title"><p className="admin-eyebrow">{isAdmin ? 'ADMIN WORKSPACE' : 'TRAINER WORKSPACE'}</p><h1>{sectionTitle || (isAdmin ? 'Admin dashboard' : 'Trainer dashboard')}</h1>
+        <p className="admin-intro">{section === 'overview' ? 'Your gym, organised. Choose a tool to get started.' : section === 'members' ? (isAdmin ? 'Manage accounts, activation and training profiles.' : 'Manage client activation and training profiles.') : section === 'invites' ? 'Create and manage codes to welcome new members.' : 'See who is training and open their workout profile.'}</p></div>
+      <button className="iconbtn admin-refresh" onClick={() => { loadUsers(); loadInvites() }} aria-label="Refresh dashboard"><Icon name="reset" /></button>
     </div>
 
-    <div className="tiles" style={{ marginBottom: 12 }}>
-      <div className="tile"><div className="l">Users</div><div className="v">{users ? users.length : '—'}</div></div>
+    <section className="admin-metrics" aria-label="Gym overview">
+      <div className="tile"><div className="l">{isAdmin ? 'Total accounts' : 'Clients'}</div><div className="v">{users ? users.length : '—'}</div></div>
       <div className="tile"><div className="l">Training now</div><div className="v" style={{ color: liveUsers.length ? 'var(--acc)' : undefined }}>{users ? liveUsers.length : '—'}</div></div>
       <div className="tile"><div className="l">Active 7d</div><div className="v">{users ? activeCount : '—'}</div></div>
       <div className="tile"><div className="l">Awaiting activation</div><div className="v">{users ? pendingCount : '—'}</div></div>
-    </div>
+    </section>
 
+    {section === 'overview' && <nav aria-label="Dashboard tools" className="admin-menu">
+      <section aria-labelledby="admin-people-title">
+        <div className="admin-section-heading"><h2 id="admin-people-title">{isAdmin ? 'Gym management' : 'Client management'}</h2><p>People, access and daily activity</p></div>
+        <div className="admin-menu-grid">
+          <DashboardTool to="/admin?section=members" icon="people" title={isAdmin ? 'Members' : 'Clients'} description={isAdmin ? 'Manage members, trainers and admin accounts.' : 'View clients and manage their training.'} meta={users ? `${users.length} accounts · ${pendingCount} pending activation` : 'Loading accounts…'} />
+          <DashboardTool to="/admin?section=invites" icon="key" title="Invite codes" description="Create invitations and manage access to your gym." meta={invites ? `${invites.filter(i => !i.usedBy).length} codes available` : 'Manage invitations'} />
+          <DashboardTool to="/admin?section=activity" icon="figureStrength" title="Training activity" description="Follow live workouts and open member profiles." meta={users ? `${liveUsers.length} training now · ${activeCount} active this week` : 'Loading activity…'} />
+        </div>
+      </section>
+      {isAdmin && <section aria-labelledby="admin-finance-title">
+        <div className="admin-section-heading"><h2 id="admin-finance-title">Finance</h2><p>Pricing, membership coverage and renewal follow-ups</p></div>
+        <div className="admin-menu-grid">
+          <DashboardTool to="/admin/finance" icon="wallet" title="Finance" description="Open the finance overview and step-by-step guides." featured />
+          {FINANCE_FEATURES.map(feature => <DashboardTool key={feature.id} to={feature.route} icon={feature.icon || { plans: 'priceTag', subscriptions: 'calendar', renewals: 'bell' }[feature.id]} title={feature.title} description={feature.description} />)}
+        </div>
+      </section>}
+    </nav>}
+
+    {section === 'activity' && <section aria-label="Live workouts">
+    {!users && <div className="card" role="status">Loading training activity…</div>}
+    {users && !liveUsers.length && <div className="card admin-empty"><Icon name="dumbbell" size={32} /><h2>No workouts in progress</h2><p>Live sessions appear here when members start training.</p></div>}
     {liveUsers.length > 0 && <div className="card" style={{ borderColor: 'var(--acc)' }}>
       <h2 className="row" style={{ margin: '0 0 8px', gap: 6 }}><Icon name="dot" style={{ fontSize: 10, color: 'var(--green)' }} />Training now</h2>
       {liveUsers.map(u => <Link key={u.id} to={'/admin/clients/' + encodeURIComponent(u.id)} state={{ fromTrainer: true }} className="row between admin-client-link" style={{ padding: '8px 2px', borderBottom: '1px solid var(--sep)' }}>
@@ -109,17 +144,21 @@ export default function Admin() {
       </Link>)}
     </div>}
 
-    {isAdmin && <Link className="card membership-entry" to="/admin/finance"><div><h2>Finance</h2><p className="small muted">Membership plans, subscriptions and step-by-step guides</p></div><Icon name="chevronRight" /></Link>}
-    <InvitesCard invites={invites} reload={loadInvites} />
+    </section>}
+    {section === 'invites' && <InvitesCard invites={invites} reload={loadInvites} />}
+
+    {section === 'members' && <section aria-labelledby="admin-member-title">
+    <div className="admin-member-heading"><h2 id="admin-member-title">{isAdmin ? 'All users' : 'Clients'}</h2>
 
     {isAdmin && <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>Create user</Button>}
+    </div>
     {creating && isAdmin && <AccountEditor onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); toast('User created'); loadUsers() }} />}
-    <h4 className="sec">{isAdmin ? 'All users' : 'Clients'}</h4>
     <div className="admin-search">
       <Icon name="magnifier" />
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder={isAdmin ? 'Search name, email or role' : 'Search clients'} aria-label="Search users" />
       {search && <button onClick={() => setSearch('')} aria-label="Clear search"><Icon name="xmark" /></button>}
     </div>
+    {!users && <p className="card" role="status">Loading accounts…</p>}
     <div className="list">
       {visibleUsers.map(u => <Link key={u.id} to={'/admin/clients/' + encodeURIComponent(u.id)} state={{ fromTrainer: true }} className="item admin-client-link" style={u.disabled ? { opacity: .55 } : null}>
           <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginRight: 5 }} />}{u.name} {needsActivation(u) && !u.disabled && <span className="tag acc">Pending activation</span>}{u.admin && <span className="tag acc" style={{ marginLeft: 4 }}>{u.role}</span>}{u.disabled && <span className="tag" style={{ marginLeft: 4, color: 'var(--red)' }}>off</span>}</div>
@@ -127,7 +166,8 @@ export default function Admin() {
         {u.hasPush && <Icon name="bell" title="push enabled" style={{ fontSize: 15, color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />
       </Link>)}
       {users && !users.length && <div className="empty">No users yet.</div>}
-      {users && users.length > 0 && !visibleUsers.length && <div className="empty small">No matching clients.</div>}
+      {users && users.length > 0 && !visibleUsers.length && <div className="empty small">No matching accounts.</div>}
     </div>
-  </div>
+    </section>}
+  </main>
 }

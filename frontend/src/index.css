@@ -1713,3 +1713,93 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .membership-notices { max-width: 900px; margin: 0 auto 16px; }
 .membership-notices h2 { font-size: 18px; color: var(--label); }
 .membership-notices p { line-height: 1.6; }
+
+/* Staff workspace: a focused menu with direct access to every management tool. */
+.admin-workspace { max-width: 1040px; margin: 0 auto; padding-bottom: 32px; }
+.admin-workspace .admin-hdr { align-items: flex-start; gap: 16px; margin-bottom: 24px; }
+.admin-workspace .admin-hdr h1 { white-space: normal; font-size: clamp(26px, 4vw, 36px); letter-spacing: -.035em; line-height: 1.15; margin: 6px 0 10px; }
+.admin-eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .14em; color: var(--label-2); }
+.admin-intro { font-size: 15px; line-height: 1.6; color: var(--label-2); max-width: 56ch; }
+.admin-refresh { flex: none; background: var(--surface); border: 1px solid var(--sep-op); min-width: 44px; min-height: 44px; }
+.admin-back { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-bottom: 12px; color: var(--label); font-size: 14px; text-decoration: none; }
+.admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 32px; }
+.admin-metrics .tile { min-width: 0; padding: 18px; border: 1px solid var(--sep-op); border-radius: var(--r-lg); background: var(--surface); }
+.admin-metrics .l { color: var(--label-2); font-size: 12px; line-height: 1.5; }
+.admin-metrics .v { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 8px; line-height: 1.2; }
+.admin-menu { display: grid; gap: 32px; }
+.admin-section-heading { margin-bottom: 16px; }
+.admin-section-heading h2, .admin-member-heading h2 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; margin: 0; }
+.admin-section-heading p { color: var(--label-2); font-size: 14px; line-height: 1.5; margin-top: 6px; }
+.admin-menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.admin-tool { display: flex; align-items: flex-start; gap: 16px; padding: 24px; min-width: 0; min-height: 156px; border: 1px solid var(--sep-op); border-radius: var(--r-lg); background: var(--surface); color: var(--label); text-decoration: none; transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease); }
+.admin-tool-icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; background: var(--surface-2); border-radius: var(--r); color: var(--label); }
+.admin-tool-content { display: grid; gap: 8px; min-width: 0; }
+.admin-tool-title { font-size: 17px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.admin-tool-description { font-size: 14px; line-height: 1.6; color: var(--label-2); }
+.admin-tool-meta { margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--label-2); }
+.admin-tool-arrow { flex: none; margin: 4px 0 0 auto; color: var(--label-2); font-size: 16px; }
+.admin-tool-featured { border-color: var(--acc-line); background: color-mix(in srgb, var(--acc) 5%, var(--surface)); }
+.admin-tool-featured .admin-tool-icon { background: var(--acc-soft); color: var(--label); }
+.admin-tool:active { background: var(--surface-2); }
+.admin-tool:focus-visible, .admin-back:focus-visible, .admin-refresh:focus-visible { outline: 2px solid var(--label); outline-offset: 4px; }
+.admin-member-heading { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+.admin-workspace .list { display: flex; flex-direction: column; }
+.admin-workspace .admin-search { border: 1px solid var(--sep-op); }
+.admin-workspace .admin-search button { min-width: 44px; min-height: 44px; }
+.admin-empty { display: grid; justify-items: center; text-align: center; gap: 12px; padding: 40px 24px; }
+.admin-empty h2 { margin: 0; font-size: 20px; }
+.admin-empty p { color: var(--label-2); line-height: 1.6; }
+@media (hover: hover) { .admin-tool:hover { border-color: var(--acc-line); background: var(--surface-2); } }
+@media (max-width: 600px) {
+  .admin-menu-grid { grid-template-columns: 1fr; }
+  .admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 28px; }
+  .admin-metrics .tile { padding: 16px; }
+  .admin-tool { min-height: 120px; padding: 20px 16px; gap: 12px; }
+  .admin-tool-icon { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) { .admin-tool { transition: none; } }
+
+/* Cash accounting shares the finance workspace's surfaces and spacing. */
+.accounting-tabs { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px; }
+.accounting-tabs a { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 16px; border:1px solid var(--sep-op); border-radius:var(--r); color:var(--label); text-decoration:none; background:var(--surface); font-size:14px; }
+.accounting-tabs a[aria-current="page"] { background:var(--acc-soft); border-color:var(--acc-line); }
+.accounting-tabs a:focus-visible { outline:2px solid var(--label); outline-offset:3px; }
+.accounting-policy { display:flex; align-items:flex-start; gap:12px; }
+.accounting-policy > .icn { flex:none; margin-top:2px; }
+.accounting-policy p { font-size:13px; line-height:1.7; color:var(--label-2); }
+.accounting-fields { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.accounting-page label { display:grid; gap:8px; font-size:14px; min-width:0; }
+.accounting-page .input { width:100%; min-width:0; min-height:44px; }
+.accounting-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:12px; margin-top:20px; }
+.accounting-balances { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin:24px 0; }
+.accounting-balance { margin:0; min-width:0; }
+.accounting-balance .accounting-total { font-size:clamp(22px,3vw,32px); letter-spacing:-.03em; line-height:1.3; margin:20px 0 8px; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+.accounting-balance dl { display:grid; gap:12px; border-top:1px solid var(--sep); margin-top:20px; padding-top:20px; }
+.accounting-balance dl > div { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+.accounting-balance dt { color:var(--label-2); }
+.accounting-balance dd { margin:0; font-variant-numeric:tabular-nums; }
+.accounting-entry-top { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.accounting-entry-top .grow { min-width:120px; }
+.accounting-entry h3 { font-size:16px; line-height:1.5; overflow-wrap:anywhere; margin:0 0 4px; }
+.accounting-entry-top strong { font-variant-numeric:tabular-nums; overflow-wrap:anywhere; max-width:100%; }
+.accounting-entry > p { margin-top:12px; overflow-wrap:anywhere; }
+.accounting-entry-footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; margin-top:20px; padding-top:12px; border-top:1px solid var(--sep-op); }
+.accounting-void { display:grid; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid var(--sep); }
+.accounting-void p, .accounting-empty p { color:var(--label-2); line-height:1.6; }
+.accounting-error { color:var(--red); margin-top:12px; }
+.accounting-void-note { color:var(--label-2); }
+.accounting-pagination { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:16px; }
+.accounting-report h2 { margin:0 0 8px; font-size:22px; }
+.accounting-report h3 { margin:24px 0 12px; font-size:16px; }
+.accounting-table-wrap { overflow-x:auto; }
+.accounting-report table { width:100%; border-collapse:collapse; font-size:14px; font-variant-numeric:tabular-nums; }
+.accounting-report th, .accounting-report td { padding:14px 12px; text-align:right; white-space:nowrap; border-bottom:1px solid var(--sep-op); }
+.accounting-report th:first-child { text-align:left; }
+.accounting-report thead { color:var(--label-2); }
+.accounting-category { display:flex; align-items:center; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--sep-op); }
+.accounting-empty { text-align:center; padding:32px 20px; }
+.accounting-empty h2 { font-size:20px; margin:12px 0; }
+.accounting-editor fieldset { min-width:0; }
+.accounting-editor fieldset > label { margin-top:16px; }
+@media(max-width:600px) { .accounting-balances, .accounting-fields { grid-template-columns:1fr; } .accounting-actions > .btn { flex:1; } .accounting-tabs a { flex:1; justify-content:center; padding:10px; } }
+.accounting-report .sr-only { position:absolute; width:1px; height:1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }

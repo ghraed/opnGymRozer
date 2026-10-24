@@ -15,19 +15,22 @@ const deliveryLabels = { pending: 'Queued', processing: 'Processing', push_sent:
 function PaymentReview({ subscription, today, onSaved, onCancel }) {
   const [status, setStatus] = useState(subscription.paymentStatus)
   const [dueOn, setDueOn] = useState(subscription.paymentDueOn || today)
+  const [receivedOn, setReceivedOn] = useState(today)
+  const [paymentMethod, setPaymentMethod] = useState('other')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const save = async event => {
     event.preventDefault(); setBusy(true); setError('')
-    try { await api('/api/admin/subscription/payment', { method: 'POST', body: JSON.stringify({ id: subscription.id, version: subscription.version, paymentStatus: status, dueOn, note }) }); onSaved() }
+    try { await api('/api/admin/subscription/payment', { method: 'POST', body: JSON.stringify({ id: subscription.id, version: subscription.version, paymentStatus: status, dueOn, note, receivedOn, paymentMethod }) }); onSaved() }
     catch (e) { setError(e.message) } finally { setBusy(false) }
   }
   return <form className="card account-editor" aria-label="Review payment" onSubmit={save}><h2>Review payment · {subscription.memberName}</h2><p>{subscription.planName} · {membershipPrice(subscription)} for the full term.</p><fieldset disabled={busy}>
     <label>Payment status<select className="input" aria-label="Payment status" value={status} onChange={e => setStatus(e.target.value)}>{Object.entries(paymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
     {status === 'unpaid' && <label>Payment due date<input className="input" type="date" min="2000-01-01" max="9999-12-31" required value={dueOn} onChange={e => setDueOn(e.target.value)} /></label>}
+    {status === 'paid' && subscription.paymentStatus !== 'paid' && <div className="account-profile-fields"><label>Payment received on<input className="input" type="date" required min="2000-01-01" value={receivedOn} onChange={e => setReceivedOn(e.target.value)} /></label><label>Payment method<select className="input" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{['cash','card','transfer','other'].map(m => <option key={m} value={m}>{m}</option>)}</select></label></div>}
     <label>Review note<textarea className="input" autoFocus required maxLength={500} rows={2} placeholder="Record how you confirmed this status" value={note} onChange={e => setNote(e.target.value)} /></label>
-    <p className="small muted">This is a manual payment-status record for the full quoted price, not a payment transaction or receipt. Partial payments are not supported here.</p>
+    <p className="small muted">Marking Paid records the full quoted price in Revenue and Profit & loss. Repeated paid reviews keep the existing receipt and its date. Changing Paid to another status voids the linked receipt as a correction; it does not issue a refund. Free terms create no revenue.</p>
     {error && <p role="alert" style={{ color: 'var(--red)' }}>{error}</p>}
     <div className="client-account-actions"><Button type="submit" variant="primary" disabled={!note.trim()}>{busy ? 'Saving…' : 'Save payment review'}</Button><Button type="button" onClick={onCancel}>Cancel</Button></div>
   </fieldset></form>

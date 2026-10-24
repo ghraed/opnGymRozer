@@ -30,6 +30,7 @@ import Settings from './views/Settings.jsx'
 import Admin from './views/Admin.jsx'
 import MembershipPlans from './views/MembershipPlans.jsx'
 import Finance from './views/Finance.jsx'
+import Accounting from './views/Accounting.jsx'
 import Renewals from './views/Renewals.jsx'
 import MembershipNotices from './components/MembershipNotices.jsx'
 import Subscriptions from './views/Subscriptions.jsx'
@@ -220,6 +221,9 @@ function Shell() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="/admin/renewals" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/revenue" element={user?.role === 'admin' ? <Accounting key="revenue" kind="revenue" /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/expenses" element={user?.role === 'admin' ? <Accounting key="expense" kind="expense" /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/profit-loss" element={user?.role === 'admin' ? <Accounting key="report" kind="report" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/finance" element={user?.role === 'admin' ? <Finance /> : <Navigate to="/home" replace />} />
               <Route path="/admin/subscriptions" element={user?.role === 'admin' ? <Subscriptions /> : <Navigate to="/home" replace />} />
               <Route path="/admin/memberships" element={user?.role === 'admin' ? <MembershipPlans /> : <Navigate to="/home" replace />} />

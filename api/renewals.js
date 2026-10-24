@@ -1,3 +1,4 @@
+import { syncSubscriptionRevenue } from './subscription-revenue.js'
 import crypto from 'node:crypto'
 import { financeToday, publicSubscription } from './subscriptions.js'
 import { validDate } from './subscription-periods.js'
@@ -31,6 +32,8 @@ export async function reviewPayment(pool, actor, body) {
   if (!['unconfirmed', 'unpaid', 'paid', 'waived'].includes(body.paymentStatus)) fail('invalid payment status')
   if (typeof body.note !== 'string' || !body.note.trim() || body.note.trim().length > 500) fail('a payment review note of 1–500 characters is required')
   if (body.paymentStatus === 'unpaid' && !validDate(body.dueOn)) fail('a valid payment due date is required')
+  if (body.paymentStatus === 'paid' && body.receivedOn !== undefined && !validDate(body.receivedOn)) fail('a valid received date is required')
+  if (body.paymentStatus === 'paid' && body.paymentMethod !== undefined && !['cash','card','transfer','other'].includes(body.paymentMethod)) fail('invalid payment method')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction(); await adminLock(conn, actor)
@@ -39,6 +42,7 @@ export async function reviewPayment(pool, actor, body) {
     if (Number(row.version) !== body.version) fail('This subscription changed. Reload before reviewing payment.', 409)
     if (row.cancelled_at && body.paymentStatus === 'unpaid') fail('Cancelled subscriptions cannot receive payment reminders', 409)
     if (body.paymentStatus === 'unpaid' && Number(row.price) === 0) fail('Free subscriptions have no payment due')
+    await syncSubscriptionRevenue(conn, row, actor.id, body.paymentStatus, body.receivedOn || financeToday(), body.paymentMethod || 'other', body.note.trim())
     const dueOn = body.paymentStatus === 'unpaid' ? body.dueOn : null
     await conn.execute('UPDATE member_subscriptions SET payment_status=?,payment_due_on=?,payment_updated_at=CURRENT_TIMESTAMP(3),payment_updated_by=?,version=version+1 WHERE id=?', [body.paymentStatus, dueOn, actor.id, row.id])
     await conn.execute('INSERT INTO subscription_payment_events(subscription_id,previous_status,payment_status,due_on,note,actor_id) VALUES (?,?,?,?,?,?)', [row.id, row.payment_status, body.paymentStatus, dueOn, body.note.trim(), actor.id])

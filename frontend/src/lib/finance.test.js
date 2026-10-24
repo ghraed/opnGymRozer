@@ -3,7 +3,7 @@ import { FINANCE_FEATURES, filterSubscriptions, financeDate } from './finance.js
 
 describe('finance guides and subscription search', () => {
   it('links every available finance tool with a readable access guide', () => {
-    expect(FINANCE_FEATURES.map(feature => feature.route)).toEqual(['/admin/memberships', '/admin/subscriptions', '/admin/renewals'])
+    expect(FINANCE_FEATURES.map(feature => feature.route)).toEqual(['/admin/revenue', '/admin/expenses', '/admin/profit-loss', '/admin/memberships', '/admin/subscriptions', '/admin/renewals'])
     for (const feature of FINANCE_FEATURES) {
       expect(feature.description.length).toBeGreaterThan(30)
       expect(feature.access).toContain('Admin → Finance →')

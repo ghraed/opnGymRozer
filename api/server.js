@@ -1,3 +1,4 @@
+import { listLedger, writeLedger, ledgerReport } from './ledger.js'
 import { renewalTracker, reviewPayment, queueReminder, scheduleMembershipReminders, dispatchMembershipReminders, memberReminders, saveReminderSettings } from './renewals.js'
 import { financeOverview, listSubscriptions, createSubscription, cancelSubscription } from './subscriptions.js'
 import { listMembershipPlans, writeMembershipPlan } from './membership-plans.js'
@@ -265,6 +266,23 @@ const routes = {
     if (!body || typeof body.id !== 'string') return json(res, 400, { error: 'reminder id required' })
     const [result] = await pool.execute('UPDATE subscription_reminders r JOIN member_subscriptions s ON s.id=r.subscription_id SET r.read_at=CURRENT_TIMESTAMP(3) WHERE r.id=? AND s.member_id=?', [body.id, user.id])
     json(res, result.affectedRows ? 200 : 404, result.affectedRows ? { ok: true } : { error: 'reminder not found' })
+  },
+  'GET /api/admin/ledger': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, await listLedger(pool, new URL(req.url, 'http://x').searchParams))
+  },
+  'POST /api/admin/ledger': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    const result = await writeLedger(pool, actor, await readBody(req), 'create')
+    json(res, result.replayed ? 200 : 201, result)
+  },
+  'POST /api/admin/ledger/void': async (req, res) => {
+    const actor = await requireAdmin(req, res); if (!actor) return
+    json(res, 200, await writeLedger(pool, actor, await readBody(req), 'void'))
+  },
+  'GET /api/admin/profit-loss': async (req, res) => {
+    if (!(await requireAdmin(req, res))) return
+    json(res, 200, await ledgerReport(pool, new URL(req.url, 'http://x').searchParams))
   },
   'GET /api/admin/finance': async (req, res) => {
     if (!(await requireAdmin(req, res))) return

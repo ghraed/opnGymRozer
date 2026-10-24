@@ -477,3 +477,50 @@ Tests simulate push acceptance/failure locally; they do not contact push
 providers or send real member messages. Existing-data migration, admin-only
 management, member isolation, review history, scheduling/cooldown, paid/renewed
 suppression, retry caps, expired leases and concurrent claims are covered.
+
+## Revenue, expenses and profit & loss
+
+Admins can open **Admin → Finance** or use the dashboard shortcuts:
+
+| Tool | Hash route | Purpose |
+| --- | --- | --- |
+| Revenue | `/#/admin/revenue` | Record money received, category, method and reference |
+| Expenses | `/#/admin/expenses` | Record money paid for gym operations |
+| Profit & loss | `/#/admin/profit-loss` | View revenue minus expenses by month and category |
+
+These are **cash-basis records**, not payment processing or accrual accounts.
+Record receipts and payments on their transaction dates. Marking a subscription **Paid** automatically records its full quoted amount as
+linked revenue on the received date. Other receipts are entered manually once.
+Changing a paid review to another status voids its linked receipt as a correction,
+not a refund. Cancelling coverage does not undo a collected payment. USD and LBP totals remain separate; no exchange rate is assumed.
+Reports include posted entries in the inclusive date range and exclude voided entries.
+For existing Paid reviews, `node api/scripts/backfill-subscription-revenue.js`
+backfills receipts using review dates and method Other; it refuses to run when
+manual revenue needs reconciliation. Repeated runs do not duplicate receipts.
+
+Entries retain exact decimal amounts, transaction date, category, description,
+payment method, optional reference, creator and creation time. Saved entries are
+immutable: to correct a mistake, void it with a reason and enter its replacement.
+Voiding retains the original amount, actor, time and reason. Revenue and expense
+history supports date, currency and posted/voided filters, with 50 entries per page.
+A stable entry ID makes retries of the same save idempotent; a different payload
+cannot overwrite an existing receipt. All reads and writes are admin-only.
+
+Migration `008_finance_ledger.sql` runs on API startup and creates a separate table,
+preserving existing users, subscriptions and payment reviews. Deploy both API and
+frontend with `docker compose up -d --build`.
+
+API endpoints:
+
+- `GET /api/admin/ledger?kind=revenue&from=2026-10-01&to=2026-10-31`
+  (also accepts `kind=expense`, `currency=USD|LBP|all`,
+  `status=posted|voided|all`, `page=1`).
+- `POST /api/admin/ledger`: `id` (unique 16–64 character identifier), `kind`,
+  `date`, `amount` (positive decimal string, up to `9999999999.99`), `currency`,
+  `category`, `description`, `method` (`cash`, `card`, `transfer`, `other`),
+  optional `reference`.
+- `POST /api/admin/ledger/void`: `id`, `reason`.
+- `GET /api/admin/profit-loss?from=2026-10-01&to=2026-10-31`.
+
+Integration checks require an **empty disposable** database matching
+`opengym_test_*`: `TEST_LEDGER_DB_NAME=opengym_test_ledger npm --prefix api test`.

@@ -202,7 +202,7 @@ export default function ClientDashboard() {
   const back = () => {
     if (editing) { setEditing(false); return }
     if (location.state?.fromTrainer) navigate(-1)
-    else navigate('/admin')
+    else navigate('/admin?section=members')
   }
   const header = <header className="hdr client-header">
     <button className="iconbtn" onClick={back} aria-label={editing ? 'Back to client dashboard' : 'Back to clients'}><Icon name="chevronLeft" /></button>
@@ -213,7 +213,7 @@ export default function ClientDashboard() {
   if (!detail) return <main className="client-dashboard">{header}
     <div className="card client-state" role={error ? 'alert' : 'status'}>
       <h2>{error ? 'Unable to open client' : 'Loading client dashboard…'}</h2>
-      {error && <><p className="muted">{error}</p><Button onClick={reload}>Try again</Button><Link to="/admin">Back to clients</Link></>}
+      {error && <><p className="muted">{error}</p><Button onClick={reload}>Try again</Button><Link to="/admin?section=members">Back to clients</Link></>}
     </div>
   </main>
 
@@ -244,7 +244,7 @@ export default function ClientDashboard() {
     try {
       await api('/api/admin/user', { method: 'DELETE', body: JSON.stringify({ id: u.id }) })
       toast('User account deleted')
-      navigate('/admin', { replace: true })
+      navigate('/admin?section=members', { replace: true })
     } catch (e) { toast(e.message); setPending(false) }
   }
 

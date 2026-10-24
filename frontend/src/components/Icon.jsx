@@ -91,6 +91,11 @@ const P = {
   expand: <path d="M14.4 4.4h5.2v5.2M9.6 19.6H4.4v-5.2M19.6 4.4 13.8 10.2M4.4 19.6l5.8-5.8" />,
   minimize: <path d="M19.6 9.6h-5.2V4.4M4.4 14.4h5.2v5.2M14.4 9.6l5.2-5.2M9.6 14.4l-5.2 5.2" />,
 
+  /* ---- management ---- */
+  people: <><circle cx="9" cy="8" r="3" /><path d="M3.5 20v-1.5a5.5 5.5 0 0 1 11 0V20M16 5.3a3 3 0 0 1 0 5.8M17 13.2a5.3 5.3 0 0 1 3.5 5V20" /></>,
+  wallet: <><path d="M20 8H6a2.5 2.5 0 0 1 0-5h12v5M4 5.5V18a2 2 0 0 0 2 2h14V8" /><path d="M20 12h-5v4h5M16.8 14h.1" /></>,
+  priceTag: <><path d="M3.5 4h8l9 9-8 8-9-9Z" /><circle cx="8" cy="8.5" r="1.2" /></>,
+
   /* ---- objects ---- */
   person: <><circle cx="12" cy="8" r="3.8" /><path d="M4.8 20.4a7.2 7.2 0 0 1 14.4 0" /></>,
   personCircle: <><circle cx="12" cy="12" r="8.4" /><circle cx="12" cy="10" r="2.9" /><path d="M6.6 18.4a5.8 5.8 0 0 1 10.8 0" /></>,
