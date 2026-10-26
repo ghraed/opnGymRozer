@@ -34,6 +34,8 @@ test('trainer activation protects new clients while preserving existing accounts
     await migrate(pool)
   })
 
+  await pool.execute("INSERT INTO membership_plans(id,name,duration_count,duration_unit,price,currency,created_by,updated_by) VALUES ('activation-plan','Monthly',1,'month',25,'USD','trainer','trainer')")
+
   const port = process.env.TEST_API_PORT || '33019'
   const child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('../', import.meta.url),
@@ -95,10 +97,20 @@ test('trainer activation protects new clients while preserving existing accounts
     const detail = await request('/api/admin/user?id=' + client.data.user.id, { cookie: trainer.cookie })
     assert.equal(detail.data.user.activated, false)
     assert.equal((await request('/api/admin/client/plan', { cookie: trainer.cookie, method: 'PUT', body: { id: client.data.user.id, plan: { routines: [] }, baseVersion: detail.data.revisions.plan } })).status, 200)
-    const result = await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: { id: client.data.user.id } })
+    assert.equal((await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: { id: client.data.user.id } })).status, 400)
+    const catalog = await request('/api/admin/activation-plans', { cookie: trainer.cookie })
+    assert.equal(catalog.status, 200)
+    const plan = catalog.data.plans.find(p => p.id === 'activation-plan')
+    const approval = { id: client.data.user.id, planId: plan.id, planVersion: plan.version, cycle: plan.subscriptionCycle, startsOn: catalog.data.asOf, requestKey: 'activation-test-request-0001' }
+    assert.equal((await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: { ...approval, planVersion: 999 } })).status, 409)
+    const stillPending = await request('/api/admin/user?id=' + client.data.user.id, { cookie: trainer.cookie })
+    assert.equal(stillPending.data.user.activated, false)
+    const result = await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: approval })
     assert.equal(result.status, 200)
     assert.equal(result.data.activated, true)
-    assert.equal((await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: { id: client.data.user.id } })).status, 200)
+    assert.equal((await request('/api/admin/user/activate', { cookie: trainer.cookie, method: 'POST', body: approval })).status, 200)
+    const [[terms]] = await pool.execute('SELECT COUNT(*) total FROM member_subscriptions WHERE member_id=?', [client.data.user.id])
+    assert.equal(terms.total, 1)
   })
   await t.test('existing pending session gains access after approval without another login', async () => {
     const me = await request('/api/me', { cookie: client.cookie })

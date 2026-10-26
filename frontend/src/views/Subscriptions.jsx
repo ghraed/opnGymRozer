@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { financeDate, filterSubscriptions } from '../lib/finance.js'
-import { membershipPrice } from '../lib/membership-plans.js'
+import { membershipPrice, membershipDuration } from '../lib/membership-plans.js'
 import { useUI } from '../store/useUI.js'
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
@@ -15,27 +15,26 @@ function SubscriptionEditor({ data, defaults, onSaved, onCancel }) {
   const memberSelect = useRef(null)
   useEffect(() => { memberSelect.current?.focus() }, [])
   const members = data.users.filter(u => u.role === 'client' && !u.disabled)
-  const plans = data.plans.filter(p => p.active && p.subscriptionCycle === draft.cycle)
+  const plans = data.plans.filter(p => p.active)
   const selectedPlan = plans.find(p => p.id === draft.planId)
   const field = key => ({ value: draft[key], onChange: e => setDraft(d => ({ ...d, [key]: e.target.value })) })
   const save = async event => {
     event.preventDefault(); if (!selectedPlan) return
     setSaving(true); setError('')
     try {
-      await api('/api/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...draft, planVersion: selectedPlan.version, requestKey }) })
+      await api('/api/admin/subscriptions', { method: 'POST', body: JSON.stringify({ ...draft, cycle: selectedPlan.subscriptionCycle, planVersion: selectedPlan.version, requestKey }) })
       onSaved()
     } catch (e) { setError(e.message) } finally { setSaving(false) }
   }
   return <form className="card account-editor" onSubmit={save} aria-label="New subscription">
     <h2>New member subscription</h2><fieldset disabled={saving}>
       <label>Member<select ref={memberSelect} className="input" aria-label="Member" required {...field('memberId')}><option value="">Choose a member</option>{members.map(member => <option key={member.id} value={member.id}>{member.name} · {member.email}</option>)}</select></label>
-      <div className="membership-field-grid"><label>Subscription period<select className="input" aria-label="Subscription period" value={draft.cycle} onChange={e => setDraft(d => ({ ...d, cycle: e.target.value, planId: '' }))}>{data.cycles.map(cycle => <option key={cycle.id} value={cycle.id}>{cycle.label} · {cycle.months} {cycle.months === 1 ? 'month' : 'months'}</option>)}</select></label>
-      <label>Start date<input className="input" type="date" min="2000-01-01" max="9998-12-31" required {...field('startsOn')} /></label></div>
-      <label>Pricing plan<select className="input" aria-label="Pricing plan" required {...field('planId')}><option value="">Choose a matching plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {membershipPrice(plan)}</option>)}</select></label>
-      {!plans.length && <p className="finance-form-note">No active {draft.cycle} pricing plans. <Link to="/admin/memberships">Create a matching plan</Link>, then reopen this form.</p>}
+      <label>Start date<input className="input" type="date" min="2000-01-01" max="9998-12-31" required {...field('startsOn')} /></label>
+      <label>Pricing plan<select className="input" aria-label="Pricing plan" required {...field('planId')}><option value="">Choose a plan</option>{plans.map(plan => <option key={plan.id} value={plan.id}>{plan.name} · {membershipDuration(plan)} · {membershipPrice(plan)}</option>)}</select></label>
+      {!plans.length && <p className="finance-form-note">No active pricing plans. <Link to="/admin/memberships">Create a plan</Link>, then reopen this form.</p>}
       {selectedPlan && <div className="finance-quote"><span className="small muted">Agreed price for the full term</span><strong>{membershipPrice(selectedPlan)}</strong><p className="small muted">The subscription keeps this price if the plan changes later.</p></div>}
       <label>Notes (optional)<textarea className="input" rows={2} maxLength={1000} {...field('notes')} /></label>
-      <p className="small muted">Coverage starts on the selected date. The end date is calculated as 1, 3 or 12 calendar months later, with shorter months adjusted to their last day. Coverage ends at the start of that end date. No automatic renewal or charge.</p>
+      <p className="small muted">Coverage starts on the selected date. The end date follows the plan’s configured duration in days, weeks, months or years. Calendar months are adjusted to their last day when needed. Coverage ends at the start of that end date. No automatic renewal or charge.</p>
       {error && <p role="alert" style={{ color: 'var(--red)' }}>{error} {error.includes('Reload') && 'Cancel this form and refresh to review the latest plans.'}</p>}
       <div className="client-account-actions"><Button type="submit" variant="primary" disabled={!selectedPlan || !draft.memberId}>{saving ? 'Saving…' : 'Create subscription'}</Button><Button type="button" onClick={onCancel}>Cancel</Button></div>
     </fieldset>
@@ -86,7 +85,7 @@ export default function Subscriptions() {
     if (subscription?.memberId) setEditor({ memberId: subscription.memberId, cycle: subscription.cycle, startsOn: subscription.endsOn > data.asOf ? subscription.endsOn : data.asOf })
   }, [data, renewalId])
   const visible = data ? filterSubscriptions(data.subscriptions, status, query) : []
-  return <main className="finance-page"><header className="hdr finance-header"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / MEMBERSHIPS</p><h1>Member subscriptions</h1><p className="muted">Monthly, quarterly and yearly membership terms.</p></div></header>
+  return <main className="finance-page"><header className="hdr finance-header"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / MEMBERSHIPS</p><h1>Member subscriptions</h1><p className="muted">Membership terms based on each plan’s duration.</p></div></header>
     <div className="membership-toolbar"><Button disabled={loading || !!editor || !!cancelling} onClick={reload}>Refresh</Button><Button variant="primary" icon="plus" disabled={loading || !!error || !!editor || !!cancelling} onClick={() => setEditor({})}>New subscription</Button></div>
     {data && editor && <SubscriptionEditor data={data} defaults={editor} onCancel={() => setEditor(null)} onSaved={() => { setEditor(null); setStatus('all'); setQuery(''); toast('Subscription created'); reload() }} />}
     {cancelling && <CancelSubscription subscription={cancelling} onCancel={() => setCancelling(null)} onDone={() => { setCancelling(null); toast('Subscription cancelled'); reload() }} />}
@@ -97,7 +96,7 @@ export default function Subscriptions() {
       {!visible.length && <div className="card empty"><h2>{data.subscriptions.length ? 'No matching subscriptions' : 'Add your first member subscription'}</h2><p>Choose a member, a pricing plan and a start date to begin.</p><Link to="/admin/memberships">Manage pricing plans</Link></div>}
       <div className="subscription-list">{visible.map(subscription => <article className="card subscription-card" key={subscription.id}>
         <div className="row between"><div className="grow"><h2>{subscription.memberName}</h2><p className="small muted">{subscription.memberEmail || (subscription.memberId ? 'Client account' : 'Account deleted · record retained')}</p></div><span className={'tag finance-status ' + subscription.status}>{subscription.status}</span></div>
-        <div className="subscription-plan"><strong>{subscription.planName}</strong><span>{data.cycles.find(c => c.id === subscription.cycle)?.label}</span><strong>{membershipPrice(subscription)}</strong></div>
+        <div className="subscription-plan"><strong>{subscription.planName}</strong><span>{subscription.durationCount ? membershipDuration(subscription) : data.cycles.find(c => c.id === subscription.cycle)?.label}</span><strong>{membershipPrice(subscription)}</strong></div>
         <dl className="subscription-dates"><div><dt>Starts on</dt><dd>{financeDate(subscription.startsOn)}</dd></div><div><dt>Ends on</dt><dd>{financeDate(subscription.endsOn)}</dd></div></dl>
         {subscription.notes && <p className="subscription-notes">{subscription.notes}</p>}
         {subscription.cancellationReason && <p className="small muted">Cancellation reason: {subscription.cancellationReason}</p>}

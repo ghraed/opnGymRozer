@@ -35,7 +35,8 @@ export default function AccountEditor({ detail, onSaved, onCancel }) {
       <label>Email<input className="input" type="email" required maxLength={254} autoComplete="off" {...field('email')} /></label>
       <label>{user ? 'New password (leave blank to keep current)' : 'Password'}<input className="input" type="password" required={!user} minLength={8} maxLength={200} autoComplete="new-password" {...field('password')} /></label>
       <label>Role<select className="input" disabled={self} {...field('role')}><option value="client">Client</option><option value="trainer">Trainer</option><option value="admin">Admin</option></select></label>
-      {draft.role === 'client' && <label className="row"><input type="checkbox" checked={draft.activated} onChange={e => setDraft(d => ({ ...d, activated: e.target.checked }))} />Account activated</label>}
+      {draft.role === 'client' && user?.activated === false && <p className="small muted">Assign a membership plan through account approval to activate this member.</p>}
+      {draft.role === 'client' && user?.activated !== false && <label className="row"><input type="checkbox" checked={draft.activated} onChange={e => setDraft(d => ({ ...d, activated: e.target.checked }))} />Account activated</label>}
       {profile && <><label className="row"><input type="checkbox" checked={editProfile} onChange={e => setEditProfile(e.target.checked)} />Edit fitness profile</label>
         {editProfile && <div className="account-profile-fields">
           {[['currentWeight', 'Weight (kg)'], ['height', 'Height (cm)'], ['targetWeight', 'Target weight (kg)']].map(([key, label]) => <label key={key}>{label}<input className="input" type="number" min="1" step="any" required={key !== 'targetWeight'} value={profile[key] ?? ''} onChange={e => setProfile(p => ({ ...p, [key]: e.target.value === '' ? null : Number(e.target.value) }))} /></label>)}

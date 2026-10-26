@@ -31,9 +31,9 @@ export default function Finance() {
       </article>)}</div>
     </section>
     <section className="card finance-guide" aria-labelledby="finance-guide"><h2 id="finance-guide">Start with these three steps</h2><ol>
-      <li><strong>Set your prices.</strong> Create separate plans for one month, three months and one year. Enter the full price for each term.</li>
-      <li><strong>Choose a member.</strong> Create or enable their client account in <Link to="/admin?section=members">Admin → Members</Link>.</li>
-      <li><strong>Add their subscription.</strong> Select the period, matching plan and start date. The end date and status are calculated for you.</li>
+      <li><strong>Set your prices.</strong> Create plans with durations in days, weeks, months or years. Enter the full price for each term.</li>
+      <li><strong>Choose a member.</strong> Create or enable their client account in <Link to="/admin/members">Admin → Members</Link>.</li>
+      <li><strong>Renew their subscription.</strong> Open <Link to="/admin/renewals">Renew subscriptions</Link>, find the client and confirm a one-month renewal, or open their card to choose another plan.</li>
     </ol></section>
     <aside className="card finance-note"><h2>Cash accounting</h2><p>Record actual money received in Revenue and money paid in Expenses. Profit &amp; loss subtracts posted expenses from posted revenue for the chosen period. USD and LBP stay separate. Marking a subscription Paid automatically creates a linked revenue entry for its full price.</p><h2>What a subscription records</h2><p>Subscriptions record membership coverage and the agreed price. They do not renew or charge automatically. Payment status is reviewed manually in the renewal tracker. Payment processing, partial payments, invoices and receipts are not available yet.</p><p className="small muted">Finance pages and their data are restricted to admins. Trainers and clients cannot access them.</p></aside>
   </main>

@@ -30,14 +30,14 @@ function PlanEditor({ plan, onSaved, onCancel }) {
     <fieldset disabled={saving}>
       <label>Plan name<input ref={nameInput} className="input" required maxLength={80} placeholder="e.g. Monthly gym access" {...field('name')} /></label>
       <label>Description and included benefits<textarea className="input" rows={3} maxLength={2000} placeholder="Describe what this plan includes" {...field('description')} /></label>
-      <div className="finance-presets" aria-label="Plan duration presets">{[['Monthly', 1, 'month'], ['Quarterly', 3, 'month'], ['Yearly', 1, 'year']].map(([label, count, unit]) => <Button type="button" size="sm" key={label} onClick={() => setDraft(d => ({ ...d, durationCount: count, durationUnit: unit }))}>{label}</Button>)}</div>
+      <div className="finance-presets" aria-label="Plan duration presets">{[['Day pass', 1, 'day'], ['Monthly', 1, 'month'], ['Quarterly', 3, 'month'], ['Yearly', 1, 'year']].map(([label, count, unit]) => <Button type="button" size="sm" key={label} onClick={() => setDraft(d => ({ ...d, durationCount: count, durationUnit: unit }))}>{label}</Button>)}</div>
       <div className="membership-field-grid">
         <label>Duration<input className="input" type="number" required min="1" max="3650" step="1" {...field('durationCount')} /></label>
         <label>Duration unit<select className="input" aria-label="Duration unit" {...field('durationUnit')}><option value="day">Days</option><option value="week">Weeks</option><option value="month">Months</option><option value="year">Years</option></select></label>
         <label>Price<input className="input" type="text" inputMode="decimal" required maxLength={13} pattern="[0-9]+([.][0-9]{1,2})?" placeholder="0.00" {...field('price')} /></label>
         <label>Currency<select className="input" aria-label="Currency" {...field('currency')}><option value="USD">USD</option><option value="LBP">LBP</option></select></label>
       </div>
-      <p className="small muted">Total price for the selected duration. Enter 0 for a free plan. Each plan has one currency.</p>
+      <p className="small muted">Renewals use this exact duration: set Days for day passes, or Months for longer plans. A 1-month plan enables the quick renewal button. Total price for the selected duration. Enter 0 for a free plan. Each plan has one currency.</p>
       {error && <p role="alert" style={{ color: 'var(--red)' }}>{error}</p>}
       <div className="client-account-actions"><Button type="submit" variant="primary">{saving ? 'Saving…' : plan ? 'Save changes' : 'Create plan'}</Button><Button type="button" onClick={onCancel}>Cancel</Button></div>
     </fieldset>

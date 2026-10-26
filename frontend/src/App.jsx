@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import { MOBILE } from './lib/mobile.js'
+import { DEMO } from './lib/demo.js'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
 import { bindUI } from './components/ui.jsx'
@@ -48,7 +50,7 @@ function applyPrefs(theme, accent) {
 
 // A sheet is an in-page state, just like the Android/iOS back affordance expects.
 // Give each open sheet a same-URL history entry: Back then dismisses the top sheet
-// before HashRouter gets a chance to leave the current screen.
+// before the router gets a chance to leave the current screen.
 function useSheetBackNavigation() {
   const sheets = useUI(s => s.sheets)
   const previous = useRef(sheets.length)
@@ -102,7 +104,7 @@ function PullToRefresh() {
   useEffect(() => {
     const isPhone = () => window.matchMedia?.('(pointer: coarse)').matches
     const onStart = e => {
-      if (loading || sheets.length || !isPhone() || window.scrollY > 0 || e.touches.length !== 1) return
+      if (loading || sheets.length || document.querySelector('dialog[open]') || !isPhone() || window.scrollY > 0 || e.touches.length !== 1) return
       gesture.current = { startY: e.touches[0].clientY, active: true, distance: 0 }
     }
     const onMove = e => {
@@ -220,7 +222,11 @@ function Shell() {
               <Route path="/library" element={<Library />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/members" element={user?.admin ? <Admin section="members" /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/invites" element={user?.admin ? <Admin section="invites" /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/activity" element={user?.admin ? <Admin section="activity" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/renewals" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />
+              <Route path="/admin/renewals/:memberId" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />
               <Route path="/admin/revenue" element={user?.role === 'admin' ? <Accounting key="revenue" kind="revenue" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/expenses" element={user?.role === 'admin' ? <Accounting key="expense" kind="expense" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/profit-loss" element={user?.role === 'admin' ? <Accounting key="report" kind="report" /> : <Navigate to="/home" replace />} />
@@ -243,5 +249,6 @@ function Shell() {
 export default function App() {
   const boot = useStore(s => s.boot)
   useEffect(() => { boot() }, [boot])
-  return <HashRouter><Shell /></HashRouter>
+  const Router = MOBILE || DEMO ? HashRouter : BrowserRouter
+  return <Router><Shell /></Router>
 }

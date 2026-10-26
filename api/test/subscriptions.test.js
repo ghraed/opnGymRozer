@@ -13,7 +13,7 @@ test('subscription periods use calendar months, leap years and explicit end boun
   assert.throws(() => subscriptionEnd('9999-12-31', 'yearly'))
   assert.equal(planCycle({ durationCount: 3, durationUnit: 'month' }), 'quarterly')
   assert.equal(planCycle({ durationCount: 12, durationUnit: 'month' }), 'yearly')
-  assert.equal(planCycle({ durationCount: 30, durationUnit: 'day' }), null)
+  assert.equal(planCycle({ durationCount: 30, durationUnit: 'day' }), 'plan')
   const term = { startsOn: '2027-01-01', endsOn: '2027-02-01' }
   assert.equal(subscriptionStatus(term, '2026-12-31'), 'scheduled')
   assert.equal(subscriptionStatus(term, '2027-01-01'), 'active')
@@ -21,11 +21,22 @@ test('subscription periods use calendar months, leap years and explicit end boun
   assert.equal(subscriptionStatus({ ...term, cancelledAt: '2027-01-10' }, '2027-01-15'), 'cancelled')
   assert.match(financeToday(new Date('2026-01-01T23:30:00Z')), /^2026-01-02$/)
 })
+test('plan durations support day passes, weeks and arbitrary calendar terms', () => {
+  for (const [start, durationCount, durationUnit, end] of [
+    ['2028-02-28', 2, 'day', '2028-03-01'], ['2027-12-31', 1, 'day', '2028-01-01'],
+    ['2027-12-25', 2, 'week', '2028-01-08'], ['2027-12-31', 2, 'month', '2028-02-29'],
+    ['2028-02-29', 2, 'year', '2030-02-28'], ['2027-01-31', 6, 'month', '2027-07-31'],
+  ]) assert.equal(subscriptionEnd(start, 'plan', { durationCount, durationUnit }), end)
+  for (const plan of [null, { durationCount: 0, durationUnit: 'day' }, { durationCount: 1.5, durationUnit: 'day' }, { durationCount: 1, durationUnit: 'bad' }]) assert.throws(() => subscriptionEnd('2027-01-01', 'plan', plan))
+  assert.throws(() => subscriptionEnd('9999-12-31', 'plan', { durationCount: 1, durationUnit: 'day' }))
+})
 test('subscription inputs reject malformed dates, periods, identifiers and missing plan versions', () => {
   const input = { memberId: 'member', planId: 'plan', planVersion: 1, cycle: 'monthly', startsOn: '2027-01-01', requestKey: crypto.randomUUID() }
   for (const patch of [{ cycle: 'weekly' }, { startsOn: '2027-02-30' }, { planVersion: 0 }, { requestKey: 'short' }, { memberId: '../x' }, { notes: true }, { notes: 'x'.repeat(1001) }]) assert.throws(() => subscriptionInput({ ...input, ...patch }), { status: 400 })
   for (const body of [null, [], {}]) assert.throws(() => subscriptionInput(body), { status: 400 })
   assert.equal(subscriptionInput(input).endsOn, '2027-02-01')
+  assert.equal(subscriptionInput({ ...input, cycle: 'plan', endsOn: '2099-01-01', durationCount: 999 }).endsOn, null)
+  assert.throws(() => subscriptionInput({ ...input, cycle: 'plan', startsOn: '2027-02-30' }), { status: 400 })
 })
 
 const database = process.env.TEST_SUBSCRIPTION_DB_NAME
@@ -95,6 +106,26 @@ test('subscriptions and Finance are restricted to admins and retain accurate mem
     const duplicate = body('monthly', '2096-01-01')
     const same = await Promise.all([post('/api/admin/subscriptions', duplicate), post('/api/admin/subscriptions', duplicate)])
     assert.deepEqual(same.map(r => r.status).sort(), [200, 201]); assert.equal(same[0].data.subscription.id, same[1].data.subscription.id)
+  })
+  await t.test('plan-based renewals use stored durations, preserve snapshots and safely replay', async () => {
+    for (const [durationCount, durationUnit, startsOn, endsOn] of [[1, 'day', '2080-02-28', '2080-02-29'], [2, 'week', '2081-12-25', '2082-01-08'], [2, 'month', '2083-12-31', '2084-02-29']]) {
+      const result = await post('/api/admin/membership-plans', { name: 'Flexible plan', durationCount, durationUnit, price: '12.50', currency: 'USD' })
+      assert.equal(result.status, 201)
+      const plan = result.data.plan
+      assert.equal(plan.subscriptionCycle, 'plan')
+      const input = { memberId: 'client', planId: plan.id, planVersion: plan.version, startsOn, cycle: 'plan', requestKey: crypto.randomUUID(), endsOn: '2099-01-01', durationCount: 999, price: '0' }
+      const created = await post('/api/admin/subscriptions', input)
+      assert.equal(created.status, 201); assert.equal(created.data.subscription.endsOn, endsOn)
+      assert.equal(created.data.subscription.durationCount, durationCount); assert.equal(created.data.subscription.durationUnit, durationUnit)
+      assert.equal(created.data.subscription.price, '12.50')
+      assert.equal((await post('/api/admin/subscriptions', { ...input, requestKey: crypto.randomUUID() })).status, 409)
+      assert.equal((await post('/api/admin/subscriptions', { ...input, cycle: 'monthly', requestKey: crypto.randomUUID() })).status, 400)
+      const changed = await request('/api/admin/membership-plan', { cookie: cookies.admin, method: 'PUT', body: { ...plan, durationCount: 9, price: '99.00' } })
+      assert.equal(changed.status, 200)
+      const replay = await post('/api/admin/subscriptions', input)
+      assert.equal(replay.status, 200); assert.equal(replay.data.subscription.endsOn, endsOn); assert.equal(replay.data.subscription.durationCount, durationCount)
+      assert.equal((await post('/api/admin/subscriptions', { ...input, requestKey: crypto.randomUUID() })).status, 409, 'stale plans cannot be booked')
+    }
   })
   await t.test('cancellation keeps history and allows replacement coverage', async () => {
     assert.equal((await post('/api/admin/subscription/cancel', { id: monthly.id, version: 1, reason: '' })).status, 400)

@@ -7,7 +7,7 @@ const media = process.env.MEDIA_TARGET || 'http://127.0.0.1:8080'
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: process.env.VITE_MOBILE === '1' || process.env.VITE_DEMO === '1' ? './' : '/',
   server: {
     proxy: {
       '/api': { target: backend, changeOrigin: true },

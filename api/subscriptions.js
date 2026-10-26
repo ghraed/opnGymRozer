@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import { SUBSCRIPTION_CYCLES, subscriptionEnd, subscriptionStatus, planCycle } from './subscription-periods.js'
+import { SUBSCRIPTION_CYCLES, subscriptionEnd, subscriptionStatus, planCycle, validDate } from './subscription-periods.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
 const objectBody = body => { if (!body || typeof body !== 'object' || Array.isArray(body)) fail('subscription fields required') }
@@ -17,7 +17,12 @@ export function subscriptionInput(body) {
   if (body.requestKey.length < 16) fail('requestKey must contain at least 16 characters')
   if (!Number.isInteger(body.planVersion) || body.planVersion < 1) fail('current plan version required')
   let endsOn
-  try { endsOn = subscriptionEnd(body.startsOn, body.cycle) } catch (error) { fail(error.message) }
+  if (body.cycle === 'plan') {
+    if (!validDate(body.startsOn)) fail('Choose a valid start date')
+    endsOn = null // Calculated from the locked plan, never from client duration fields.
+  } else {
+    try { endsOn = subscriptionEnd(body.startsOn, body.cycle) } catch (error) { fail(error.message) }
+  }
   if (body.notes != null && (typeof body.notes !== 'string' || body.notes.trim().length > 1000)) fail('notes must be at most 1000 characters')
   return { memberId: body.memberId, planId: body.planId, planVersion: body.planVersion, cycle: body.cycle,
     startsOn: body.startsOn, endsOn, notes: (body.notes || '').trim(), requestKey: body.requestKey }
@@ -27,7 +32,7 @@ const selectSubscriptions = `SELECT s.*,u.name current_member_name,u.email membe
 export const publicSubscription = (row, today) => {
   const subscription = { id: row.id, memberId: row.member_id, memberName: row.current_member_name || row.member_name,
     memberEmail: row.member_email || null, planId: row.plan_id, planName: row.plan_name,
-    cycle: row.cycle, startsOn: dateText(row.starts_on), endsOn: dateText(row.ends_on), price: String(row.price), currency: row.currency,
+    cycle: row.cycle, durationCount: row.duration_count == null ? SUBSCRIPTION_CYCLES[row.cycle]?.months : Number(row.duration_count), durationUnit: row.duration_unit || 'month', startsOn: dateText(row.starts_on), endsOn: dateText(row.ends_on), price: String(row.price), currency: row.currency,
     notes: row.notes, version: Number(row.version), cancelledAt: row.cancelled_at,
     paymentStatus: row.payment_status, paymentDueOn: row.payment_due_on ? dateText(row.payment_due_on) : null,
     cancellationReason: row.cancellation_reason, createdAt: row.created_at }
@@ -49,19 +54,28 @@ export async function financeOverview(pool) {
   return { ...Object.fromEntries(Object.entries({ ...plans, ...counts }).map(([key, value]) => [key, Number(value)])), asOf: today, timezone: FINANCE_TIMEZONE }
 }
 
-async function authorizeAndLock(conn, actor, memberId) {
-  const [users] = await conn.execute('SELECT id,role,disabled,name FROM users WHERE id IN (?,?) ORDER BY id FOR UPDATE', [actor.id, memberId || actor.id])
+async function authorizeAndLock(conn, actor, memberId, activation = false) {
+  const [users] = await conn.execute('SELECT id,role,disabled,name,activated FROM users WHERE id IN (?,?) ORDER BY id FOR UPDATE', [actor.id, memberId || actor.id])
   const storedActor = users.find(u => u.id === actor.id)
-  if (!storedActor || storedActor.role !== 'admin' || storedActor.disabled) fail('admin access required', 403)
+  if (!storedActor || !(activation ? ['admin', 'trainer'].includes(storedActor.role) : storedActor.role === 'admin') || storedActor.disabled) fail('admin access required', 403)
   return users.find(u => u.id === memberId)
 }
+export async function activateMemberWithSubscription(pool, actor, body) {
+  objectBody(body)
+  return saveSubscription(pool, actor, { memberId: body.id, planId: body.planId, planVersion: body.planVersion, cycle: body.cycle, startsOn: body.startsOn, requestKey: body.requestKey }, true)
+}
+
 export async function createSubscription(pool, actor, body) {
+  return saveSubscription(pool, actor, body, false)
+}
+
+async function saveSubscription(pool, actor, body, activation) {
   const input = subscriptionInput(body)
-  const requestHash = crypto.createHash('sha256').update(JSON.stringify(input)).digest('hex')
+  const requestHash = crypto.createHash('sha256').update(JSON.stringify(activation ? { ...input, activation: true } : input)).digest('hex')
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const member = await authorizeAndLock(conn, actor, input.memberId)
+    const member = await authorizeAndLock(conn, actor, input.memberId, activation)
     const [previous] = await conn.execute(selectSubscriptions + ' WHERE s.request_key=?', [input.requestKey])
     if (previous.length) {
       if (previous[0].request_hash !== requestHash || previous[0].created_by !== actor.id) fail('This request key was used for a different subscription', 409)
@@ -70,16 +84,20 @@ export async function createSubscription(pool, actor, body) {
     }
     if (!member || member.role !== 'client') fail('Choose a client account', 400)
     if (member.disabled) fail('Enable this client account before adding a subscription', 409)
+    if (activation && member.activated) fail('This client is already activated. Reload their profile.', 409)
+    if (activation && input.startsOn !== financeToday()) fail('Activation coverage must start today. Reload the available plans.', 409)
     const [plans] = await conn.execute('SELECT * FROM membership_plans WHERE id=? FOR UPDATE', [input.planId])
     const plan = plans[0]
     if (!plan || !plan.active) fail('Choose an active membership plan', 409)
     if (Number(plan.version) !== input.planVersion) fail('The plan price or details changed. Reload and review the plan before saving.', 409)
     if (planCycle({ durationCount: Number(plan.duration_count), durationUnit: plan.duration_unit }) !== input.cycle) fail('The pricing plan does not match the selected subscription period')
+    try { input.endsOn = subscriptionEnd(input.startsOn, 'plan', { durationCount: Number(plan.duration_count), durationUnit: plan.duration_unit }) } catch (error) { fail(error.message) }
     const [overlaps] = await conn.execute('SELECT id FROM member_subscriptions WHERE member_id=? AND cancelled_at IS NULL AND starts_on<? AND ends_on>? FOR UPDATE', [member.id, input.endsOn, input.startsOn])
     if (overlaps.length) fail('This member already has a subscription covering part of these dates. Choose another start date or cancel the overlapping term.', 409)
     const id = crypto.randomBytes(12).toString('base64url')
-    await conn.execute(`INSERT INTO member_subscriptions(id,member_id,member_name,plan_id,plan_name,cycle,starts_on,ends_on,price,currency,notes,request_key,request_hash,created_by)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, member.id, member.name, plan.id, plan.name, input.cycle, input.startsOn, input.endsOn, String(plan.price), plan.currency, input.notes, input.requestKey, requestHash, actor.id])
+    await conn.execute(`INSERT INTO member_subscriptions(id,member_id,member_name,plan_id,plan_name,cycle,duration_count,duration_unit,starts_on,ends_on,price,currency,notes,request_key,request_hash,created_by)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, member.id, member.name, plan.id, plan.name, input.cycle, Number(plan.duration_count), plan.duration_unit, input.startsOn, input.endsOn, String(plan.price), plan.currency, input.notes, input.requestKey, requestHash, actor.id])
+    if (activation) await conn.execute('UPDATE users SET activated=TRUE WHERE id=?', [member.id])
     const [[row]] = await conn.execute(selectSubscriptions + ' WHERE s.id=?', [id])
     await conn.commit()
     return { subscription: publicSubscription(row, financeToday()), replayed: false }

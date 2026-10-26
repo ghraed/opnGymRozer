@@ -95,7 +95,9 @@ docker compose up -d --build
 ```
 
 Open **http://localhost:8080** and create an account. New clients can sign in but wait for
-a trainer to activate them from **Trainer → client dashboard → Activate account**.
+an admin or trainer to approve them from **client dashboard → Assign plan & approve**.
+Approval requires selecting a membership plan and confirming its price and duration;
+the subscription and account activation are saved in one transaction.
 The waiting page checks for approval automatically. Existing accounts keep their access
 when upgrading; disabled accounts remain disabled. After activation, clients must complete
 the three profile setup pages (body details and goals, training preferences, and review)
@@ -302,7 +304,7 @@ the test server connection. Use fresh databases for subsequent runs.
 
 ## Membership plans and pricing
 
-Open **Admin → Membership plans** (`/#/admin/memberships`). Only admins can
+Open **Admin → Membership plans** (`/admin/memberships`). Only admins can
 access this page and its API. Create and edit plans with a name, description /
 benefits, duration (days, weeks, months or years), total price and currency
 (USD or LBP). A price of zero is allowed. Prices are entered explicitly; no
@@ -343,29 +345,42 @@ access controls, exact prices, validation, archive/restore and concurrent edits.
 
 ## Finance hub and member subscriptions
 
-Admins open **Admin → Finance** (`/#/admin/finance`) for an overview of available
+Admins open **Admin → Finance** (`/admin/finance`) for an overview of available
 finance tools, descriptions, direct links, access instructions and a three-step
 getting-started guide. The hub shows active pricing plans and active, scheduled
 and expired subscription counts. Only implemented tools are marked available;
 payments, invoices and receipts are explicitly described as not yet available.
 Trainers and clients cannot open Finance, subscription pages or their APIs.
 
-**Admin → Finance → Member subscriptions** (`/#/admin/subscriptions`) records
-fixed-term monthly (1 calendar month), quarterly (3 calendar months) and yearly
-(12 calendar months) coverage for client accounts. Create an active pricing plan
-with the matching duration first; the plan editor now has Monthly, Quarterly and
-Yearly duration presets. A yearly plan may use either 1 year or 12 months. A
-30-day plan is deliberately not treated as a calendar-month plan. Each period
-uses its own explicitly configured full-term price; quarterly/yearly amounts
-are not inferred by multiplying a monthly price.
+**Admin → Finance → Renewals** (`/admin/renewals`) shows every client as a
+searchable mobile-friendly card, including clients without a membership. Tap
+**Renew 1 month** and confirm the member, plan, full price and coverage dates.
+The shortcut uses the member's most recently used active one-month plan, or the
+first active one-month plan in catalog order. Its name and price appear on the
+card. Open **View all plans** to choose a different plan, including day passes,
+weeks or multi-month terms. Disabled accounts remain visible but cannot renew.
+New coverage starts after the latest non-cancelled booked term, or today when
+coverage has expired. Payment review and reminder tools are under
+**Payments & reminders** on the same page.
 
-Select an enabled client, a period, a matching active plan and a start date.
+Configure durations and full-term prices in **Membership plans & pricing**.
+Use Days for day passes, or Weeks, Months and Years for longer plans. An active
+plan of exactly 1 month enables the quick renewal button; a 30-day plan is a
+different duration. Prices are taken from the selected plan, never inferred by
+multiplying another plan's price.
+
+**Member subscriptions** (`/admin/subscriptions`) also allows an enabled client,
+an active plan and an explicit start date to be selected.
 Optional notes are saved with the term. Subscriptions retain the agreed plan
-name, exact price and currency independently of future catalog edits or archive
+name, duration, exact price and currency independently of future catalog edits or archive
 operations. The API rejects a changed plan version so admins must review the
-new price before proceeding. Client account activation is separate from
-subscription coverage; adding coverage does not activate, suspend or restrict
-workout/login access.
+new price before proceeding. Ordinary subscription renewals do not activate, suspend
+or restrict workout/login access. Approving a pending client requires assigning
+an active membership plan, with coverage starting on the business date. Both admins
+and trainers can use `GET /api/admin/activation-plans` and then
+`POST /api/admin/user/activate` with `id`, `planId`, `planVersion`, `cycle`,
+`startsOn` and an idempotent `requestKey`. A failed assignment leaves the account pending.
+Trainers retain no access to general finance or renewal APIs.
 
 Dates are calendar dates: coverage includes the start date and stops at the
 **start of the displayed end date**. For example, 15 October → 15 November is
@@ -390,13 +405,15 @@ refund. Expired terms cannot be cancelled. Subscriptions are not deleted when a
 member account or catalog plan is deleted; nullable references and saved names /
 prices retain the historical record. A deleted member's email is not retained in
 subscription snapshots. Migration `006_member_subscriptions.sql` creates this
-separate table without editing existing users, plans or workout history.
+separate table without editing existing users, plans or workout history. Migration
+`010_subscription_durations.sql` adds duration snapshots and plan-based periods,
+preserving existing terms. It runs on API startup; deploy the API and frontend together.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
 | GET | `/api/admin/finance` | Admin-only finance overview |
 | GET | `/api/admin/subscriptions` | Subscription records, business date and supported periods |
-| POST | `/api/admin/subscriptions` | Create coverage using `memberId`, `planId`, `planVersion`, `cycle`, `startsOn`, `requestKey`, optional `notes` |
+| POST | `/api/admin/subscriptions` | Create coverage using `memberId`, `planId`, `planVersion`, `cycle` (the plan’s `subscriptionCycle`, including `plan` for custom durations), `startsOn`, `requestKey`, optional `notes` |
 | POST | `/api/admin/subscription/cancel` | Cancel using `id`, `version` and required `reason` |
 
 For the new integration suite, provide a fourth **empty, disposable** database
@@ -407,7 +424,7 @@ validation tests also run without a database.
 
 ## Renewal tracking and payment reminders
 
-Open **Admin → Finance → Renewals & payment reminders** (`/#/admin/renewals`).
+Open **Admin → Finance → Renewals & payment reminders** (`/admin/renewals`).
 The tracker lists expiring memberships, overdue renewals, terms with a next term
 recorded and manually reviewed unpaid subscriptions. Use search and status
 filters, review payment, follow **Add next term**, or send a renewal/payment
@@ -482,11 +499,11 @@ suppression, retry caps, expired leases and concurrent claims are covered.
 
 Admins can open **Admin → Finance** or use the dashboard shortcuts:
 
-| Tool | Hash route | Purpose |
+| Tool | Route | Purpose |
 | --- | --- | --- |
-| Revenue | `/#/admin/revenue` | Record money received, category, method and reference |
-| Expenses | `/#/admin/expenses` | Record money paid for gym operations |
-| Profit & loss | `/#/admin/profit-loss` | View revenue minus expenses by month and category |
+| Revenue | `/admin/revenue` | Record money received, category, method and reference |
+| Expenses | `/admin/expenses` | Record money paid for gym operations |
+| Profit & loss | `/admin/profit-loss` | View revenue minus expenses by month and category |
 
 These are **cash-basis records**, not payment processing or accrual accounts.
 Record receipts and payments on their transaction dates. Marking a subscription **Paid** automatically records its full quoted amount as
@@ -524,3 +541,12 @@ API endpoints:
 
 Integration checks require an **empty disposable** database matching
 `opengym_test_*`: `TEST_LEDGER_DB_NAME=opengym_test_ledger npm --prefix api test`.
+
+The self-hosted web app uses normal paths such as `/admin/renewals/<member-id>`.
+Old `/#/...` bookmarks are converted automatically. Nginx serves `index.html` for
+app routes, so refreshing a member link works. Mobile and static demo builds retain
+their existing hash routing.
+
+Admin sections use `/admin/members`, `/admin/invites` and `/admin/activity`.
+Member renewals use `/admin/renewals/<member-id>`. Older `?section=...` and
+`?member=...` links redirect to these paths, preserving search filters.

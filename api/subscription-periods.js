@@ -7,19 +7,27 @@ export function validDate(value) {
 }
 
 // Calendar periods, with month-end clamping. End date is exclusive.
-export function subscriptionEnd(startsOn, cycle) {
-  if (!validDate(startsOn) || !Object.hasOwn(SUBSCRIPTION_CYCLES, cycle)) throw new Error('Choose a valid start date and subscription period')
+export function subscriptionEnd(startsOn, cycle, plan) {
+  const duration = cycle === 'plan' ? plan : { durationCount: SUBSCRIPTION_CYCLES[cycle]?.months, durationUnit: 'month' }
+  if (!validDate(startsOn) || !duration || !Number.isInteger(duration.durationCount) || duration.durationCount < 1 || duration.durationCount > 3650 || !['day', 'week', 'month', 'year'].includes(duration.durationUnit)) throw new Error('Choose a valid start date and subscription period')
   const start = new Date(startsOn + 'T00:00:00Z')
-  const target = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + SUBSCRIPTION_CYCLES[cycle].months, 1))
-  const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
-  target.setUTCDate(Math.min(start.getUTCDate(), lastDay))
+  let target
+  if (['day', 'week'].includes(duration.durationUnit)) {
+    target = new Date(start)
+    target.setUTCDate(target.getUTCDate() + duration.durationCount * (duration.durationUnit === 'week' ? 7 : 1))
+  } else {
+    const months = duration.durationCount * (duration.durationUnit === 'year' ? 12 : 1)
+    target = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + months, 1))
+    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate()
+    target.setUTCDate(Math.min(start.getUTCDate(), lastDay))
+  }
   if (target.getUTCFullYear() > 9999) throw new Error('End date is out of range')
   return target.toISOString().slice(0, 10)
 }
 
 export function planCycle(plan) {
   const months = plan.durationUnit === 'month' ? plan.durationCount : plan.durationUnit === 'year' ? plan.durationCount * 12 : null
-  return Object.entries(SUBSCRIPTION_CYCLES).find(([, cycle]) => cycle.months === months)?.[0] || null
+  return Object.entries(SUBSCRIPTION_CYCLES).find(([, cycle]) => cycle.months === months)?.[0] || 'plan'
 }
 
 export function subscriptionStatus(subscription, today) {

@@ -1,9 +1,11 @@
 import AccountEditor from '../components/AccountEditor.jsx'
+import FilterPanel from '../components/FilterPanel.jsx'
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api } from '../lib/api.js'
+import { legacyAdminPath } from '../lib/routing.js'
 import { needsActivation } from '../lib/activation.js'
 import { fmtDate } from '../lib/format.js'
 import { FINANCE_FEATURES } from '../lib/finance.js'
@@ -13,6 +15,8 @@ import { Button } from '../components/ui.jsx'
 // Staff dashboard; admin-only user management is also guarded server-side.
 // Deliberately English-only — it isn't part of the translated end-user surface, so it stays
 // out of the per-language string packs.
+
+const userTypes = { all: 'All users', client: 'Clients', trainer: 'Trainers', admin: 'Admins' }
 
 const rel = ts => {
   if (!ts) return 'never'
@@ -57,20 +61,27 @@ function DashboardTool({ to, icon, title, description, meta, featured = false })
   </Link>
 }
 
-export default function Admin() {
+export default function Admin({ section = 'overview' }) {
   const user = useStore(s => s.user)
   const toast = useUI(s => s.toast)
   const isAdmin = user?.role === 'admin'
   const [creating, setCreating] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [users, setUsers] = useState(null)
   const [invites, setInvites] = useState(null)
   const [inviteOnly, setInviteOnly] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
-  const requestedSection = searchParams.get('section')
-  const section = ['members', 'invites', 'activity'].includes(requestedSection) ? requestedSection : searchParams.has('q') ? 'members' : 'overview'
+  const legacyPath = section === 'overview' || searchParams.has('section') ? legacyAdminPath(searchParams, isAdmin) : null
   useEffect(() => { window.scrollTo(0, 0) }, [section])
   const sectionTitle = { members: isAdmin ? 'Members & staff' : 'Clients', invites: 'Invite codes', activity: 'Training activity' }[section]
   const search = searchParams.get('q') || ''
+  const requestedRole = searchParams.get('role')
+  const role = isAdmin && ['client', 'trainer', 'admin'].includes(requestedRole) ? requestedRole : 'all'
+  const setRole = value => setSearchParams(params => {
+    if (value === 'all') params.delete('role')
+    else params.set('role', value)
+    return params
+  }, { replace: true })
   const setSearch = value => setSearchParams(params => {
     if (value) params.set('q', value)
     else params.delete('q')
@@ -82,11 +93,13 @@ export default function Admin() {
   // poll every 15s so the "training now" section stays live without a manual refresh
   useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
   if (!user?.admin) return null
+  if (legacyPath) return <Navigate to={legacyPath} replace />
 
   const liveUsers = (users || []).filter(u => u.live)
   const activeCount = (users || []).filter(u => u.lastSync && Date.now() - u.lastSync < 7 * 86400000).length
   const pendingCount = (users || []).filter(u => needsActivation(u) && !u.disabled).length
   const visibleUsers = (users || [])
+    .filter(u => role === 'all' || u.role === role)
     .filter(u => [u.name, u.email, u.role].some(value => value?.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())))
     .sort((a, b) => {
       const aPending = needsActivation(a) && !a.disabled
@@ -118,9 +131,9 @@ export default function Admin() {
       <section aria-labelledby="admin-people-title">
         <div className="admin-section-heading"><h2 id="admin-people-title">{isAdmin ? 'Gym management' : 'Client management'}</h2><p>People, access and daily activity</p></div>
         <div className="admin-menu-grid">
-          <DashboardTool to="/admin?section=members" icon="people" title={isAdmin ? 'Members' : 'Clients'} description={isAdmin ? 'Manage members, trainers and admin accounts.' : 'View clients and manage their training.'} meta={users ? `${users.length} accounts · ${pendingCount} pending activation` : 'Loading accounts…'} />
-          <DashboardTool to="/admin?section=invites" icon="key" title="Invite codes" description="Create invitations and manage access to your gym." meta={invites ? `${invites.filter(i => !i.usedBy).length} codes available` : 'Manage invitations'} />
-          <DashboardTool to="/admin?section=activity" icon="figureStrength" title="Training activity" description="Follow live workouts and open member profiles." meta={users ? `${liveUsers.length} training now · ${activeCount} active this week` : 'Loading activity…'} />
+          <DashboardTool to="/admin/members" icon="people" title={isAdmin ? 'Accounts & staff' : 'Clients'} description={isAdmin ? 'Manage members, trainers and admin accounts.' : 'View clients and manage their training.'} meta={users ? `${users.length} accounts · ${pendingCount} pending activation` : 'Loading accounts…'} />
+          <DashboardTool to="/admin/invites" icon="key" title="Invite codes" description="Create invitations and manage access to your gym." meta={invites ? `${invites.filter(i => !i.usedBy).length} codes available` : 'Manage invitations'} />
+          <DashboardTool to="/admin/activity" icon="figureStrength" title="Training activity" description="Follow live workouts and open member profiles." meta={users ? `${liveUsers.length} training now · ${activeCount} active this week` : 'Loading activity…'} />
         </div>
       </section>
       {isAdmin && <section aria-labelledby="admin-finance-title">
@@ -131,6 +144,7 @@ export default function Admin() {
         </div>
       </section>}
     </nav>}
+
 
     {section === 'activity' && <section aria-label="Live workouts">
     {!users && <div className="card" role="status">Loading training activity…</div>}
@@ -153,11 +167,15 @@ export default function Admin() {
     {isAdmin && <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>Create user</Button>}
     </div>
     {creating && isAdmin && <AccountEditor onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); toast('User created'); loadUsers() }} />}
+    <div className="renewal-search-toolbar admin-user-filters">
     <div className="admin-search">
       <Icon name="magnifier" />
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder={isAdmin ? 'Search name, email or role' : 'Search clients'} aria-label="Search users" />
       {search && <button onClick={() => setSearch('')} aria-label="Clear search"><Icon name="xmark" /></button>}
     </div>
+    {isAdmin && <button type="button" className={'renewal-filter-trigger' + (role !== 'all' ? ' is-active' : '')} aria-label={role === 'all' ? 'Filter users by type' : `Filter users: ${userTypes[role]}`} aria-haspopup="dialog" aria-expanded={filtersOpen} disabled={!users} onClick={() => setFiltersOpen(true)}><Icon name="filter" size={20} />{role !== 'all' && <span className="renewal-filter-indicator" />}</button>}
+    </div>
+    {users && <div className="renewal-list-meta"><span role="status">{visibleUsers.length} of {users.length} users{role !== 'all' ? ` · ${userTypes[role]}` : ''}</span>{role !== 'all' && <button type="button" onClick={() => setRole('all')}>Clear filter</button>}</div>}
     {!users && <p className="card" role="status">Loading accounts…</p>}
     <div className="list">
       {visibleUsers.map(u => <Link key={u.id} to={'/admin/clients/' + encodeURIComponent(u.id)} state={{ fromTrainer: true }} className="item admin-client-link" style={u.disabled ? { opacity: .55 } : null}>
@@ -168,6 +186,7 @@ export default function Admin() {
       {users && !users.length && <div className="empty">No users yet.</div>}
       {users && users.length > 0 && !visibleUsers.length && <div className="empty small">No matching accounts.</div>}
     </div>
+    {isAdmin && filtersOpen && <FilterPanel title="Filter users" legend="User type" applyLabel="Show users" value={role} options={Object.entries(userTypes).map(([value, label]) => ({ value, label, count: value === 'all' ? (users || []).length : (users || []).filter(account => account.role === value).length }))} onApply={value => { setRole(value); setFiltersOpen(false) }} onClose={() => setFiltersOpen(false)} />}
     </section>}
   </main>
 }

@@ -49,11 +49,12 @@ export async function manageUser(pool, actor, body, action) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    const [users] = await conn.query('SELECT id,role,disabled FROM users ORDER BY id FOR UPDATE')
+    const [users] = await conn.query('SELECT id,role,disabled,activated FROM users ORDER BY id FOR UPDATE')
     const currentActor = users.find(u => u.id === actor.id)
     if (!currentActor || currentActor.role !== 'admin' || currentActor.disabled) fail('admin access required', 403)
     const target = users.find(u => u.id === body.id)
     if (action !== 'create' && !target) fail('no such user', 404)
+    if (target?.role === 'client' && !target.activated && fields.activated === true && (!fields.role || fields.role === 'client')) fail('Assign a membership plan through account approval before activating this client', 409)
     if (target?.id === actor.id && (action === 'delete' || fields.disabled === true || (fields.role && fields.role !== 'admin'))) fail('cannot delete, disable or demote your own admin account')
     if (target?.role === 'admin' && !target.disabled && (action === 'delete' || fields.disabled === true || (fields.role && fields.role !== 'admin')) && users.filter(u => u.role === 'admin' && !u.disabled).length <= 1) fail('cannot remove the final enabled admin')
     const id = action === 'create' ? crypto.randomBytes(12).toString('base64url') : body.id

@@ -1,3 +1,4 @@
+import ActivationPlanDialog from '../components/ActivationPlanDialog.jsx'
 import AccountEditor from '../components/AccountEditor.jsx'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -184,6 +185,7 @@ export default function ClientDashboard() {
   const [revision, setRevision] = useState(0)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [approving, setApproving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [shown, setShown] = useState(10)
   const reload = () => setRevision(n => n + 1)
@@ -202,7 +204,7 @@ export default function ClientDashboard() {
   const back = () => {
     if (editing) { setEditing(false); return }
     if (location.state?.fromTrainer) navigate(-1)
-    else navigate('/admin?section=members')
+    else navigate('/admin/members')
   }
   const header = <header className="hdr client-header">
     <button className="iconbtn" onClick={back} aria-label={editing ? 'Back to client dashboard' : 'Back to clients'}><Icon name="chevronLeft" /></button>
@@ -213,7 +215,7 @@ export default function ClientDashboard() {
   if (!detail) return <main className="client-dashboard">{header}
     <div className="card client-state" role={error ? 'alert' : 'status'}>
       <h2>{error ? 'Unable to open client' : 'Loading client dashboard…'}</h2>
-      {error && <><p className="muted">{error}</p><Button onClick={reload}>Try again</Button><Link to="/admin?section=members">Back to clients</Link></>}
+      {error && <><p className="muted">{error}</p><Button onClick={reload}>Try again</Button><Link to="/admin/members">Back to clients</Link></>}
     </div>
   </main>
 
@@ -244,7 +246,7 @@ export default function ClientDashboard() {
     try {
       await api('/api/admin/user', { method: 'DELETE', body: JSON.stringify({ id: u.id }) })
       toast('User account deleted')
-      navigate('/admin?section=members', { replace: true })
+      navigate('/admin/members', { replace: true })
     } catch (e) { toast(e.message); setPending(false) }
   }
 
@@ -265,8 +267,9 @@ export default function ClientDashboard() {
     {editingAccount && isAdmin && <AccountEditor key={u.id + '-' + revision} detail={detail} onCancel={() => setEditingAccount(false)} onSaved={() => { setEditingAccount(false); toast('Profile updated'); reload() }} />}
     {detail.onboarding && <section className="card"><h2>Fitness profile</h2><dl>{Object.entries(detail.onboarding).filter(([key, value]) => key !== 'completedAt' && value != null && typeof value !== 'object').map(([key, value]) => <div key={key} className="client-row"><dt>{key.replace(/([A-Z])/g, ' $1')}</dt><dd>{String(value).replaceAll('_', ' ')}</dd></div>)}</dl></section>}
     {needsActivation(u) && !u.disabled && <section className="card client-activation" aria-labelledby="activation-title">
-      <div><h2 id="activation-title">Waiting for activation</h2><p className="small muted">This client can sign in, but needs your approval to access their plan and log workouts.</p></div>
-      <Button variant="primary" disabled={loading || pending} onClick={() => changeAccount('/api/admin/user/activate', {}, 'Client account activated')}>Activate account</Button>
+      <div><h2 id="activation-title">Waiting for activation</h2><p className="small muted">Choose a membership plan and approve this client to give them access to workouts.</p></div>
+      <Button variant="primary" disabled={loading || pending} onClick={() => setApproving(true)}>Assign plan & approve</Button>
+      {approving && <ActivationPlanDialog key={u.id} member={u} onClose={() => setApproving(false)} onSaved={() => { setApproving(false); toast('Membership assigned and account activated'); reload() }} />}
     </section>}
 
 

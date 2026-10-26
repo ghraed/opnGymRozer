@@ -1,6 +1,6 @@
 import { listLedger, writeLedger, ledgerReport } from './ledger.js'
 import { renewalTracker, reviewPayment, queueReminder, scheduleMembershipReminders, dispatchMembershipReminders, memberReminders, saveReminderSettings } from './renewals.js'
-import { financeOverview, listSubscriptions, createSubscription, cancelSubscription } from './subscriptions.js'
+import { financeToday, financeOverview, listSubscriptions, createSubscription, cancelSubscription, activateMemberWithSubscription } from './subscriptions.js'
 import { listMembershipPlans, writeMembershipPlan } from './membership-plans.js'
 import { isStaff, canViewUser, publicUser } from './access.js'
 import { manageUser } from './admin-users.js'
@@ -178,13 +178,17 @@ const routes = {
   },
   'GET /api/admin/client/state': async (req, res) => { const actor = await requireTrainer(req, res); if (!actor) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u || !canViewUser(actor, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, { user: publicUser(u), ...(await readClientState(pool, id)) }) },
   'PUT /api/admin/client/plan': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req), u = await getUser(pool, b.id); if (!u || !canViewUser(t, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, await saveTrainerPlan(pool, t, u.id, b.plan, b.baseVersion)) },
-  'POST /api/admin/user/activate': async (req, res) => {
+  'GET /api/admin/activation-plans': async (req, res) => {
     if (!(await requireTrainer(req, res))) return
-    const b = await readBody(req), u = await getUser(pool, b.id)
-    if (!u || u.role !== 'client') return json(res, 404, { error: 'no such client' })
-    if (u.disabled) return json(res, 409, { error: 'Enable this account before activating it' })
-    await pool.execute('UPDATE users SET activated=TRUE WHERE id=?', [u.id])
-    json(res, 200, { ok: true, id: u.id, activated: true })
+    json(res, 200, { plans: (await listMembershipPlans(pool)).filter(plan => plan.active), asOf: financeToday() })
+  },
+  'POST /api/admin/user/activate': async (req, res) => {
+    const actor = await requireTrainer(req, res); if (!actor) return
+    const body = await readBody(req), member = await getUser(pool, body.id)
+    if (!member || member.role !== 'client') return json(res, 404, { error: 'no such client' })
+    if (member.disabled) return json(res, 409, { error: 'Enable this account before activating it' })
+    const result = await activateMemberWithSubscription(pool, actor, body)
+    json(res, 200, { ok: true, id: result.subscription.memberId, activated: true, replayed: result.replayed })
   },
   'POST /api/admin/user/disable': async (req, res) => {
     const actor = await requireTrainer(req, res); if (!actor) return

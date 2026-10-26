@@ -1,106 +1,85 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { Link, Navigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../lib/api.js'
+import { legacyRenewalPath } from '../lib/routing.js'
 import { financeDate } from '../lib/finance.js'
-import { membershipPrice } from '../lib/membership-plans.js'
+import { membershipDuration, membershipPrice } from '../lib/membership-plans.js'
+import { renewalMembers } from '../lib/renewals.js'
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
+import RenewalConfirmation from '../components/RenewalConfirmation.jsx'
+import FilterPanel from '../components/FilterPanel.jsx'
 import { useUI } from '../store/useUI.js'
-import { confirmSheet } from '../sheets.jsx'
 
-const paymentLabels = { unconfirmed: 'Not reviewed', unpaid: 'Awaiting payment', paid: 'Paid', waived: 'Waived / no payment due' }
-const renewalLabels = { overdue: 'Renewal overdue', due_soon: 'Expiring soon', renewed: 'Next term recorded', current: 'Current', cancelled: 'Cancelled' }
-const deliveryLabels = { pending: 'Queued', processing: 'Processing', push_sent: 'Push accepted', in_app: 'In-app only', failed: 'Push retry / failed', skipped: 'No longer applicable' }
+const RenewalFollowups = lazy(() => import('./RenewalFollowups.jsx'))
+const labels = { active: 'Active', scheduled: 'Scheduled', expired: 'Expired', none: 'No membership' }
+const payments = { paid: 'Paid', unpaid: 'Awaiting payment', unconfirmed: 'Not reviewed', waived: 'Waived' }
 
-function PaymentReview({ subscription, today, onSaved, onCancel }) {
-  const [status, setStatus] = useState(subscription.paymentStatus)
-  const [dueOn, setDueOn] = useState(subscription.paymentDueOn || today)
-  const [receivedOn, setReceivedOn] = useState(today)
-  const [paymentMethod, setPaymentMethod] = useState('other')
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const save = async event => {
-    event.preventDefault(); setBusy(true); setError('')
-    try { await api('/api/admin/subscription/payment', { method: 'POST', body: JSON.stringify({ id: subscription.id, version: subscription.version, paymentStatus: status, dueOn, note, receivedOn, paymentMethod }) }); onSaved() }
-    catch (e) { setError(e.message) } finally { setBusy(false) }
-  }
-  return <form className="card account-editor" aria-label="Review payment" onSubmit={save}><h2>Review payment · {subscription.memberName}</h2><p>{subscription.planName} · {membershipPrice(subscription)} for the full term.</p><fieldset disabled={busy}>
-    <label>Payment status<select className="input" aria-label="Payment status" value={status} onChange={e => setStatus(e.target.value)}>{Object.entries(paymentLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-    {status === 'unpaid' && <label>Payment due date<input className="input" type="date" min="2000-01-01" max="9999-12-31" required value={dueOn} onChange={e => setDueOn(e.target.value)} /></label>}
-    {status === 'paid' && subscription.paymentStatus !== 'paid' && <div className="account-profile-fields"><label>Payment received on<input className="input" type="date" required min="2000-01-01" value={receivedOn} onChange={e => setReceivedOn(e.target.value)} /></label><label>Payment method<select className="input" value={paymentMethod} onChange={e => setPaymentMethod(e.target.value)}>{['cash','card','transfer','other'].map(m => <option key={m} value={m}>{m}</option>)}</select></label></div>}
-    <label>Review note<textarea className="input" autoFocus required maxLength={500} rows={2} placeholder="Record how you confirmed this status" value={note} onChange={e => setNote(e.target.value)} /></label>
-    <p className="small muted">Marking Paid records the full quoted price in Revenue and Profit & loss. Repeated paid reviews keep the existing receipt and its date. Changing Paid to another status voids the linked receipt as a correction; it does not issue a refund. Free terms create no revenue.</p>
-    {error && <p role="alert" style={{ color: 'var(--red)' }}>{error}</p>}
-    <div className="client-account-actions"><Button type="submit" variant="primary" disabled={!note.trim()}>{busy ? 'Saving…' : 'Save payment review'}</Button><Button type="button" onClick={onCancel}>Cancel</Button></div>
-  </fieldset></form>
-}
-function ReminderSettings({ settings, onSaved }) {
-  const [draft, setDraft] = useState(settings)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const save = async event => {
-    event.preventDefault(); setBusy(true); setError('')
-    try { await api('/api/admin/reminder-settings', { method: 'PUT', body: JSON.stringify(draft) }); onSaved() }
-    catch (e) { setError(e.message) } finally { setBusy(false) }
-  }
-  return <details className="card renewal-settings"><summary>Automatic reminder settings · {settings.enabled ? 'On' : 'Off'}</summary><form className="account-editor" aria-label="Automatic reminder settings" onSubmit={save}><fieldset disabled={busy}>
-    <label className="row"><input type="checkbox" checked={draft.enabled} onChange={e => setDraft(d => ({ ...d, enabled: e.target.checked }))} />Enable automatic membership reminders</label>
-    <div className="account-profile-fields">{[['renewalLeadDays', 'Days before membership ends', 0, 60], ['paymentLeadDays', 'Days before payment is due', 0, 60], ['repeatDays', 'Repeat unresolved reminders every (days)', 1, 30]].map(([key, label, min, max]) => <label key={key}>{label}<input className="input" type="number" required min={min} max={max} step="1" value={draft[key]} onChange={e => setDraft(d => ({ ...d, [key]: e.target.value === '' ? '' : Number(e.target.value) }))} /></label>)}</div>
-    <p className="small muted">The server checks every minute. Members see reminders in the app; push is attempted only where enabled. Reminders repeat at this interval until resolved. Manual reminders are limited to one per type, per subscription, per day.</p>
-    {error && <p role="alert" style={{ color: 'var(--red)' }}>{error}</p>}
-    <Button type="submit" variant="primary">{busy ? 'Saving…' : 'Save reminder settings'}</Button>
-  </fieldset></form></details>
-}
 
 export default function Renewals() {
+  const { memberId } = useParams()
+  const [params] = useSearchParams()
+  const legacyPath = legacyRenewalPath(params)
+  return legacyPath ? <Navigate to={legacyPath} replace /> : <RenewalWorkspace memberId={memberId} />
+}
+
+function RenewalWorkspace({ memberId }) {
   const toast = useUI(s => s.toast)
   const [data, setData] = useState(null)
-  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
-  const [filter, setFilter] = useState('attention')
   const [query, setQuery] = useState('')
-  const [review, setReview] = useState(null)
-  const [pending, setPending] = useState(null)
+  const [filter, setFilter] = useState('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [renewal, setRenewal] = useState(null)
+  const [success, setSuccess] = useState('')
+  const [followups, setFollowups] = useState(false)
   const reload = () => setRevision(n => n + 1)
+  useEffect(() => { window.scrollTo(0, 0); setSuccess('') }, [memberId])
   useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError('')
-    api('/api/admin/renewals', { signal: controller.signal }).then(value => { if (!controller.signal.aborted) setData(value) }).catch(e => { if (!controller.signal.aborted) setError(e.message) }).finally(() => { if (!controller.signal.aborted) setLoading(false) })
+    const controller = new AbortController()
+    setLoading(true); setError('')
+    Promise.all([api('/api/admin/subscriptions', { signal: controller.signal }), api('/api/admin/users', { signal: controller.signal }), api('/api/admin/membership-plans', { signal: controller.signal })])
+      .then(([subscriptions, users, plans]) => { if (!controller.signal.aborted) setData({ ...subscriptions, users: users.users, plans: plans.plans }) })
+      .catch(e => { if (!controller.signal.aborted) setError(e.message) })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [revision])
-  const send = (subscription, kind) => confirmSheet({ title: `Send ${kind} reminder?`, message: `Notify ${subscription.memberName} about ${subscription.planName}. The reminder will appear in their app; push will be attempted if enabled.`, confirmText: 'Send reminder', onConfirm: async () => {
-    setPending(subscription.id)
-    try { const { reminder } = await api('/api/admin/subscription/remind', { method: 'POST', body: JSON.stringify({ id: subscription.id, kind }) }); toast(deliveryLabels[reminder.delivery] || 'Reminder recorded'); reload() }
-    catch (e) { toast(e.message) } finally { setPending(null) }
-  } })
-  const rows = (data?.subscriptions || []).filter(s => {
-    const attention = ['overdue', 'due_soon'].includes(s.renewalStatus) || s.paymentStatus === 'unpaid'
-    const matches = filter === 'all' || (filter === 'attention' ? attention && s.status !== 'cancelled' : filter === 'unpaid' ? s.paymentStatus === 'unpaid' && s.status !== 'cancelled' : filter === 'unconfirmed' ? s.paymentStatus === 'unconfirmed' && s.status !== 'cancelled' : s.renewalStatus === filter)
-    return matches && [s.memberName, s.memberEmail, s.planName].filter(Boolean).some(value => value.toLowerCase().includes(query.trim().toLowerCase()))
-  })
-  return <main className="finance-page"><header className="hdr finance-header"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / FOLLOW-UP</p><h1>Renewals & reminders</h1><p className="muted">Follow up on expiring memberships and reviewed unpaid terms.</p></div></header>
-    <div className="membership-toolbar"><span className="small muted">{data ? 'Status as of ' + financeDate(data.asOf) : 'Loading tracker…'}</span><Button disabled={loading || !!review || !!pending} onClick={reload}>Refresh tracker</Button></div>
+  const members = data ? renewalMembers(data.users, data.subscriptions, data.plans, data.asOf) : []
+  const selected = members.find(m => m.id === memberId)
+  const activePlans = data?.plans.filter(p => p.active) || []
+  const visible = members.filter(m => (filter === 'all' || m.status === filter) && [m.name, m.email].some(v => v?.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())))
+  const choose = (member, plan) => setRenewal({ member, plan, startsOn: member.startsOn, today: data.asOf })
+  return <main className="finance-page quick-renewals">
+    <header className="hdr finance-header"><Link className="iconbtn" to={memberId ? '/admin/renewals' : '/admin/finance'} aria-label={memberId ? 'Back to all members' : 'Back to finance'}><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / RENEWALS</p><h1>{memberId ? selected?.name || 'Member renewal' : 'Renewals'}</h1><p className="muted">{memberId ? 'Choose a plan. Confirm. Done.' : 'Manage coverage and renew memberships.'}</p></div></header>
+    <div className="membership-toolbar renewal-toolbar"><Link to="/admin/memberships"><Icon name="priceTag" />Plans & pricing</Link><Button size="sm" icon="reset" disabled={loading || !!renewal} onClick={reload}>Refresh</Button></div>
+    {success && <div className="card renewal-success" role="status">{success}</div>}
     {error && <div className="card" role="alert"><p>{error}</p><Button onClick={reload}>Try again</Button></div>}
-    {data && <>
-      <section className="finance-summary" aria-label="Renewal overview">{[['Expiring soon', s => s.renewalStatus === 'due_soon'], ['Renewal overdue', s => s.renewalStatus === 'overdue'], ['Awaiting payment', s => s.paymentStatus === 'unpaid' && s.status !== 'cancelled'], ['Payment not reviewed', s => s.paymentStatus === 'unconfirmed' && s.status !== 'cancelled']].map(([label, fn]) => <div className="card" key={label}><span className="small muted">{label}</span><strong>{data.subscriptions.filter(fn).length}</strong></div>)}</section>
-      <ReminderSettings key={'settings-' + revision} settings={data.settings} onSaved={() => { toast('Reminder settings saved'); reload() }} />
-      <p className="small muted">Older subscriptions start as “Not reviewed”. Review payment and set a due date to enable payment reminders. Paid or waived terms stop payment reminders; a next term stops renewal reminders.</p>
-      {review && <PaymentReview subscription={review} today={data.asOf} onCancel={() => setReview(null)} onSaved={() => { setReview(null); toast('Payment status updated'); reload() }} />}
-      <div className="membership-filters"><label>Show<select className="input" aria-label="Renewal filter" value={filter} onChange={e => setFilter(e.target.value)}>{[['attention', 'Needs attention'], ['due_soon', 'Expiring soon'], ['overdue', 'Renewal overdue'], ['unpaid', 'Awaiting payment'], ['unconfirmed', 'Payment not reviewed'], ['renewed', 'Next term recorded'], ['all', 'All terms']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Search<input className="input" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Member or plan" /></label></div>
-      {loading ? <p role="status">Refreshing tracker…</p> : !error && <div className="subscription-list">{rows.map(s => <article className="card subscription-card" key={s.id}>
-        <div className="row between"><h2>{s.memberName}</h2><span className="tag">{renewalLabels[s.renewalStatus]}</span></div><p>{s.planName} · {membershipPrice(s)}</p>
-        <dl className="subscription-dates"><div><dt>Coverage ends</dt><dd>{financeDate(s.endsOn)}</dd></div><div><dt>Payment</dt><dd>{paymentLabels[s.paymentStatus]}</dd></div></dl>
-        {s.paymentDueOn && <p className={'small' + (s.paymentOverdue ? ' renewal-overdue' : ' muted')}>Payment {s.paymentOverdue ? 'overdue since ' : 'due on '}{financeDate(s.paymentDueOn)}</p>}
-        {!s.canRemind && <p className="small muted">Reminders unavailable: member account is deleted, disabled or no longer a client.</p>}
-        <div className="client-account-actions"><Button disabled={!!review || !!pending} onClick={() => setReview(s)}>Review payment</Button>
-          {s.memberId && s.status !== 'cancelled' && !s.nextTermId && <Link className="btn" to="/admin/subscriptions" state={{ renewSubscriptionId: s.id }}>Add next term</Link>}
-          {s.canRemind && s.status !== 'cancelled' && !s.nextTermId && <Button disabled={!!review || !!pending} onClick={() => send(s, 'renewal')}>Remind renewal</Button>}
-          {s.canRemind && s.status !== 'cancelled' && s.paymentStatus === 'unpaid' && <Button disabled={!!review || !!pending} onClick={() => send(s, 'payment')}>Remind payment</Button>}
+    {loading ? <p role="status">Loading members…</p> : data && !error && <>
+      {memberId ? selected ? <>
+        <section className="card renewal-member-summary" aria-label="Member coverage"><div className="row between"><div><h2>{selected.name}</h2><p className="small muted">{selected.email}</p></div><span className={'tag finance-status ' + selected.status}>{labels[selected.status]}</span></div><p>{selected.latest ? <>Latest coverage ends <strong>{financeDate(selected.latest.endsOn)}</strong>.</> : 'No membership recorded yet.'} New coverage starts <strong>{financeDate(selected.startsOn)}</strong>.</p>{selected.disabled && <p className="renewal-overdue">This account is disabled. Enable it before renewing.</p>}<Link to={'/admin/clients/' + encodeURIComponent(selected.id)}>View client profile</Link></section>
+        <h2 className="finance-section-title">Choose a membership plan</h2><p className="muted">Each plan includes its full duration and total price.</p>
+        <div className="membership-grid">{activePlans.map(plan => <article className="card membership-plan" key={plan.id}><h3>{plan.name}</h3><div className="renewal-plan-price"><strong>{membershipPrice(plan)}</strong><span className="small muted">{membershipDuration(plan)}</span></div>{plan.description && <p className="membership-description small muted">{plan.description}</p>}<div className="client-account-actions"><Button variant="primary" disabled={selected.disabled || !!renewal} onClick={() => choose(selected, plan)}>Renew · {membershipDuration(plan)}</Button></div></article>)}</div>
+        {!activePlans.length && <div className="card empty"><h3>No active plans</h3><Link to="/admin/memberships">Create a membership plan</Link></div>}
+        <details className="card renewal-history"><summary>Membership history · {selected.history.length} terms</summary>{selected.history.map(s => <div className="renewal-term" key={s.id}><strong>{s.planName} · {membershipPrice(s)}</strong><p className="small muted">{financeDate(s.startsOn)} – {financeDate(s.endsOn)} · {s.status} · {payments[s.paymentStatus]}</p></div>)}{!selected.history.length && <p className="muted">No previous memberships.</p>}</details>
+      </> : <div className="card empty"><p>Client account not found.</p><Link to="/admin/renewals">Back to all members</Link></div> : <>
+        <div className="renewal-search-toolbar">
+          <div className="renewal-search"><Icon name="magnifier" /><input type="search" placeholder="Search name or email" aria-label="Find a member" value={query} onChange={e => setQuery(e.target.value)} />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear member search"><Icon name="xmark" /></button>}</div>
+          <button type="button" className={'renewal-filter-trigger' + (filter !== 'all' ? ' is-active' : '')} aria-label={filter === 'all' ? 'Filter members by membership status' : `Filter members: ${labels[filter]}`} aria-haspopup="dialog" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(true)}><Icon name="filter" size={20} />{filter !== 'all' && <span className="renewal-filter-indicator" />}</button>
         </div>
-        <details className="renewal-audit"><summary>Payment review history</summary>{data.paymentEvents.filter(e => e.subscriptionId === s.id).map((event, i) => <p className="small" key={i}><strong>{paymentLabels[event.to]}</strong> · {event.actor}<br />{new Date(event.createdAt).toLocaleString()}<br />{event.note}</p>)}{!data.paymentEvents.some(e => e.subscriptionId === s.id) && <p className="small muted">No recent review recorded.</p>}</details>
-      </article>)}{!rows.length && <div className="card empty">No matching follow-ups.</div>}</div>}
-      <details className="card renewal-history"><summary>Recent reminder history</summary><p className="small muted">Latest 100 reminders. “Push accepted” confirms acceptance by the push service, not that the member saw it.</p>{data.history.map(item => <div key={item.id} className="client-row"><div><strong>{item.memberName}</strong><p className="small muted">{item.kind} · {financeDate(item.date)} · {item.source}</p></div><div><span className="tag">{deliveryLabels[item.delivery]}</span><p className="small muted">{item.detail} · {item.attempts} delivery attempts</p></div></div>)}{!data.history.length && <p className="small muted">No reminders sent yet.</p>}</details>
+        <div className="renewal-list-meta"><span role="status">{visible.length} of {members.length} members{filter !== 'all' ? ` · ${labels[filter]}` : ''}</span>{filter !== 'all' ? <button type="button" onClick={() => setFilter('all')}>Clear filter</button> : <span>As of {financeDate(data.asOf)}</span>}</div>
+        {!activePlans.some(p => p.durationUnit === 'month' && p.durationCount === 1) && <p className="finance-form-note">For quick one-month renewals, <Link to="/admin/memberships">create an active plan with a duration of 1 month</Link>. Other plans are available inside each member.</p>}
+        <div className="renewal-member-grid">{visible.map(member => <article className="card renewal-member-card" data-status={member.status} key={member.id}>
+          <div className="renewal-card-heading"><span className="renewal-avatar" aria-hidden="true">{member.name.trim().slice(0, 1).toUpperCase()}</span><div className="grow"><h2><Link to={'/admin/renewals/' + encodeURIComponent(member.id)}>{member.name}</Link></h2><p className="small muted">{member.email}</p></div><span className={'tag finance-status ' + member.status}>{member.disabled ? 'Disabled' : labels[member.status]}</span></div>
+          <div className="renewal-coverage"><div><span className="renewal-detail-label">Membership</span><strong>{member.latest?.planName || 'No plan assigned'}</strong>{member.latest && <span className="small muted">{membershipPrice(member.latest)}</span>}</div><div className="renewal-coverage-date"><span className="renewal-detail-label">{member.status === 'expired' ? 'Expired on' : member.status === 'scheduled' ? 'Coverage ends' : 'Renewal date'}</span><strong>{member.latest ? financeDate(member.latest.endsOn) : '—'}</strong></div></div>
+          <div className="renewal-card-footer"><div className="renewal-actions">{member.quickPlan ? <Button variant="primary" disabled={member.disabled || !!renewal} onClick={() => choose(member, member.quickPlan)} aria-label={`Renew ${member.name} for one month at ${membershipPrice(member.quickPlan)}`}><span className="renewal-button-label">Renew 1 month<small>{membershipPrice(member.quickPlan)}</small></span></Button> : <Link className="btn primary" to={'/admin/renewals/' + encodeURIComponent(member.id)}>Choose a plan</Link>}<Link className="btn" to={'/admin/renewals/' + encodeURIComponent(member.id)}>All plans<Icon name="chevronRight" /></Link></div></div>
+        </article>)}</div>
+        {!visible.length && <div className="card empty">{members.length ? 'No members match your search.' : 'No client accounts yet.'}</div>}
+      </>}
+      <details className="renewal-tools" onToggle={e => setFollowups(e.currentTarget.open)}><summary>Payments & reminders</summary>{followups && <Suspense fallback={<p role="status">Loading follow-ups…</p>}><RenewalFollowups key={revision} /></Suspense>}</details>
     </>}
+    {filtersOpen && <FilterPanel title="Filter members" legend="Membership status" applyLabel="Show members" value={filter} options={Object.entries({ all: 'All members', ...labels }).map(([value, label]) => ({ value, label, count: value === 'all' ? members.length : members.filter(member => member.status === value).length }))} onApply={value => { setFilter(value); setFiltersOpen(false) }} onClose={() => setFiltersOpen(false)} />}
+    {renewal && <RenewalConfirmation renewal={renewal} onClose={() => setRenewal(null)} onSaved={() => { const message = `${renewal.member.name} renewed for ${membershipDuration(renewal.plan)}.`; setRenewal(null); setSuccess(message); toast(message); reload() }} />}
   </main>
 }
