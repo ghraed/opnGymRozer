@@ -76,7 +76,7 @@ as a home-screen app, passkey sign-in, offline support, sync across your phone a
 - 💪 **Muscle map** — a front-and-back body diagram shaded by how much work each muscle got, over a week, a month or all time. It names the muscles you *haven't* trained in that period, previews what a routine hits while you build it, and shows what you just trained when you finish. Male or female figure, your pick
 - 🔔 **Push notifications** — rest-timer alerts even with the app closed, plus an optional reminder on days you have a workout planned but haven't logged one. Opt in per profile; keys are generated on first run, nothing to configure
 - 🔑 **Passkeys, not passwords** — Face ID / Touch ID / fingerprint login; each profile keeps its own data, synced across devices
-- 🛠️ **Admin dashboard** (optional) — for whoever runs the instance: who's training right now, per-user history, disable accounts, and invite-only signup. Off by default, so a fresh instance stays open with no admin
+- 🛠️ **Admin dashboard** (optional) — for whoever runs the instance: who's training right now, per-user history, disable accounts. Off by default, so a fresh instance stays open with no admin
 - 🎨 **Designed, not assembled** — light/dark themes and 8 accent colors saved to your profile, over a hand-drawn icon set instead of emoji, so it looks the same on every phone
 - 🌍 **12 languages** — full UI translation (EN, DE, ES, FR, IT, PT, PL, TR, RU, ZH, KO, HI); exercise instructions localized in 10 of them, loaded on demand so the app stays fast
 - 📥 **Bring your history with you** — import from **FitNotes** (Android and iOS), **Strong** and **Hevy**, or body weight straight out of an **Apple Health** export. Exercise names are matched against the library and anything unrecognised becomes one of your own exercises, so nothing in the file is dropped
@@ -152,7 +152,7 @@ mobile app is the install-and-done flavor.
 
 ## Your data
 
-Lives in MySQL. Accounts, invitations and subscriptions are relational; client settings,
+Lives in MySQL. Accounts and subscriptions are relational; client settings,
 plans and progress are isolated, versioned JSON documents. Back up the `mysql_data` volume (or use
 `mysqldump`) to back up the application. Passkey private keys never touch the server.
 
@@ -170,7 +170,6 @@ All via `.env` (see `.env.example`):
 |---------------|------------------------------------------------------|-------------------------|
 | `ORIGIN`      | Full URL the app is served from                      | `http://localhost:8080` |
 | `WEB_PORT`    | Host port for the web UI                             | `8080`                  |
-| `INVITE_ONLY` | Require an invite code to create a profile           | *(off)*                 |
 | `DB_HOST` / `DB_PORT` | External MySQL connection (local development) | `127.0.0.1:3306`     |
 | `DB_NAME` / `DB_USER` / `DB_PASSWORD` | MySQL database credentials | `opengym`            |
 
@@ -355,6 +354,10 @@ Trainers and clients cannot open Finance, subscription pages or their APIs.
 **Admin → Finance → Renewals** (`/admin/renewals`) shows every client as a
 searchable mobile-friendly card, including clients without a membership. Tap
 **Renew 1 month** and confirm the member, plan, full price and coverage dates.
+Confirming this quick renewal also marks the new term Paid and records its full
+price as linked revenue on the business date. The confirmation includes a payment
+method. Retrying the same confirmation cannot duplicate the term or receipt.
+Free terms are marked Paid without creating a revenue entry.
 The shortcut uses the member's most recently used active one-month plan, or the
 first active one-month plan in catalog order. Its name and price appear on the
 card. Open **View all plans** to choose a different plan, including day passes,
@@ -547,6 +550,10 @@ Old `/#/...` bookmarks are converted automatically. Nginx serves `index.html` fo
 app routes, so refreshing a member link works. Mobile and static demo builds retain
 their existing hash routing.
 
-Admin sections use `/admin/members`, `/admin/invites` and `/admin/activity`.
+Admin sections use `/admin/members` and `/admin/activity`.
 Member renewals use `/admin/renewals/<member-id>`. Older `?section=...` and
 `?member=...` links redirect to these paths, preserving search filters.
+
+
+Registration uses a name, email and password. New members remain pending until an
+admin or trainer assigns a membership plan and approves their account.

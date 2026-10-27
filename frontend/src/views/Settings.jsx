@@ -4,7 +4,7 @@ import { useStore, DEF, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { ACCENTS, todayISO, localTZ } from '../lib/format.js'
 import { effortOf } from '../lib/history.js'
-import { api, passwordRegister, IS_ANDROID } from '../lib/api.js'
+import { passwordRegister, IS_ANDROID } from '../lib/api.js'
 import { pushSupported, enablePush, disablePush, sendTestPush } from '../lib/push.js'
 import { wakeLockSupported } from '../lib/wakelock.js'
 import { t, LANGS, INSTR_LANGS } from '../lib/i18n.js'
@@ -325,21 +325,16 @@ function PushCard({ S, update, toast }) {
   </>
 }
 
-// The same registration as the sign-in screen's, reached from Settings instead. It asks for
-// the invite code on the same terms: an invite-only instance rejects a registration without
-// one, so a form that cannot collect it is a form that cannot succeed.
+// Registration is also available from Settings.
 function RegisterInline({ close, setUser, pushState, pullState, toast }) {
   const nameRef = useRef(null)
-  const [email, setEmail] = useState(''), [password, setPassword] = useState(''), [code, setCode] = useState('')
-  const [inviteOnly, setInviteOnly] = useState(false)
-  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => {}) }, [])
+  const [email, setEmail] = useState(''), [password, setPassword] = useState('')
   const go = async () => {
     const n = (nameRef.current.value || '').trim()
     if (!n) { toast(t('Enter a name')); return }
-    if (inviteOnly && !code.trim()) { toast(t('An invite code is required')); return }
     try {
       if (!email.trim() || !password) { toast(t('Enter your email and password')); return }
-      const u = await passwordRegister(n, email.trim(), password, code.trim()); setUser(u); close()
+      const u = await passwordRegister(n, email.trim(), password); setUser(u); close()
       if (hasData(useStore.getState().S)) { await pushState(); toast(t('Profile created — data moved into it')) }
       else { await pullState(); toast(t('Welcome, {0}', u.name)) }
       onboardingSheet()
@@ -352,12 +347,7 @@ function RegisterInline({ close, setUser, pushState, pullState, toast }) {
     <TextField ref={nameRef} placeholder={t('Your name')} maxLength={40} />
     <div style={{ height: 10 }} /><input className="input" type="email" autoComplete="email" placeholder={t('Email address')} value={email} onChange={e => setEmail(e.target.value)} />
     <div style={{ height: 10 }} /><input className="input" type="password" autoComplete="new-password" placeholder={t('Password (at least 8 characters)')} value={password} onChange={e => setPassword(e.target.value)} />
-    {inviteOnly && <>
-      <div style={{ height: 10 }} />
-      <input className="input" placeholder={t('Invite code')} maxLength={40} value={code}
-        onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} />
-      <div className="dim small" style={{ marginTop: 6 }}>{t('This app is invite-only — enter the code you were given.')}</div>
-    </>}
+
     <div style={{ height: 12 }} /><Button variant="primary" onClick={go}>{t('Create account')}</Button>
   </>
 }

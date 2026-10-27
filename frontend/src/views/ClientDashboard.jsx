@@ -318,7 +318,6 @@ export default function ClientDashboard() {
 
     <details className="card client-account">
       <summary>Account settings</summary>
-      {u.invitedBy && <p className="small muted">Invited by {u.invitedBy}</p>}
       {(u.id !== viewer?.id && (isAdmin || !u.admin)) && <div className="client-access">
         <p className="small muted">{u.disabled ? 'This account is disabled. Enable it to allow login again.' : 'Disable access temporarily, or permanently delete this client and their data.'}</p>
         {confirmDelete ? <div className="client-delete-confirm" role="alert">

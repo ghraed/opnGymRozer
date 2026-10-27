@@ -24,17 +24,15 @@ const conn = await pool.getConnection()
 try {
   await conn.beginTransaction()
   for (const user of db.users) {
-    await conn.execute(`INSERT INTO users(id,name,role,disabled,session_version,invited_by,created_at,last_reminder_date)
-      VALUES (?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)`,
-      [user.id, user.name, user.admin ? 'trainer' : 'client', !!user.disabled, user.sv || 0, user.invitedBy || null, user.created ? new Date(user.created) : new Date(), user.lastReminder || null])
+    await conn.execute(`INSERT INTO users(id,name,role,disabled,session_version,created_at,last_reminder_date)
+      VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE name=VALUES(name)`,
+      [user.id, user.name, user.admin ? 'trainer' : 'client', !!user.disabled, user.sv || 0, user.created ? new Date(user.created) : new Date(), user.lastReminder || null])
   }
   for (const cred of db.creds) await conn.execute(`INSERT INTO passkey_credentials(credential_id,user_id,public_key,counter,transports)
     VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE counter=VALUES(counter)`, [cred.id, cred.userId, cred.publicKey, cred.counter || 0, JSON.stringify(cred.transports || [])])
   for (const sub of db.subs || []) await conn.execute(`INSERT INTO push_subscriptions(user_id,endpoint_hash,endpoint,keys_json,created_at)
     VALUES (?,UNHEX(SHA2(?,256)),?,?,?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id),keys_json=VALUES(keys_json)`,
     [sub.userId, sub.endpoint, sub.endpoint, JSON.stringify(sub.keys), sub.created ? new Date(sub.created) : new Date()])
-  for (const invite of db.invites || []) await conn.execute(`INSERT INTO invites(code,note,created_by,used_by,created_at,used_at,revoked_at)
-    VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE note=VALUES(note)`, [invite.code, invite.note || '', invite.createdBy || null, invite.usedBy || null, invite.created ? new Date(invite.created) : new Date(), invite.usedAt ? new Date(invite.usedAt) : null, invite.revoked ? new Date() : null])
   for (const [userId, state] of states) {
     const parts = splitState(state)
     await conn.execute(`INSERT INTO client_states(user_id,settings_json,plan_json,progress_json,plan_version,progress_version,plan_updated_by,client_timestamp)

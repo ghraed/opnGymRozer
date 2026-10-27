@@ -70,19 +70,12 @@ export function hashPassword(password, salt = crypto.randomBytes(16)) {
   return `scrypt$${salt.toString('base64url')}$${derived.toString('base64url')}`
 }
 
-export async function createPasswordUser(pool, user, inviteCode = null) {
+export async function createPasswordUser(pool, user) {
   const conn = await pool.getConnection()
   try {
     await conn.beginTransaction()
-    let invite = null
-    if (inviteCode) {
-      const [rows] = await conn.execute('SELECT * FROM invites WHERE code=? AND used_by IS NULL AND revoked_at IS NULL FOR UPDATE', [inviteCode])
-      invite = rows[0]
-      if (!invite) throw Object.assign(new Error('invite code is no longer valid — ask for a new one'), { status: 403 })
-    }
-    await conn.execute('INSERT INTO users(id,name,email,password_hash,invited_by,created_at) VALUES (?,?,?,?,?,?)', [user.id, user.name, user.email, user.passwordHash, inviteCode, user.created])
+    await conn.execute('INSERT INTO users(id,name,email,password_hash,created_at) VALUES (?,?,?,?,?)', [user.id, user.name, user.email, user.passwordHash, user.created])
     await conn.execute('INSERT INTO client_states(user_id,settings_json,plan_json,progress_json,plan_updated_by) VALUES (?,?,?,?,?)', [user.id, '{}', '{}', '{}', user.id])
-    if (invite) await conn.execute('UPDATE invites SET used_by=?,used_at=? WHERE code=?', [user.id, user.created, inviteCode])
     await conn.commit()
   } catch (error) { await conn.rollback(); throw error } finally { conn.release() }
 }
@@ -151,9 +144,6 @@ export async function deleteClientAccount(pool, id) {
     const [rows] = await conn.execute('SELECT role FROM users WHERE id=? FOR UPDATE', [id])
     if (!rows.length) throw Object.assign(new Error('no such client'), { status: 404 })
     if (rows[0].role !== 'client') throw Object.assign(new Error('cannot delete a trainer'), { status: 400 })
-    // Deleting a user clears invites.used_by via its foreign key. Revoke redeemed
-    // codes first so account deletion cannot make those invitations reusable.
-    await conn.execute('UPDATE invites SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3)) WHERE used_by=?', [id])
     await conn.execute("DELETE FROM users WHERE id=? AND role='client'", [id])
     // Foreign keys remove client state, photos, credentials and push subscriptions.
     await conn.commit()

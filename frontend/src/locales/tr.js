@@ -354,9 +354,6 @@ export default {
   'Remove from routine': 'Rutinden çıkar',
   'Minimize': 'Küçült',
   'Expand': 'Büyüt',
-  'Invite code': 'Davet kodu',
-  'This app is invite-only — enter the code you were given.': 'Bu uygulama yalnızca davetle — sana verilen kodu gir.',
-  'An invite code is required': 'Bir davet kodu gerekli',
   'Admin dashboard': 'Yönetici paneli',
   // --- muscle map ---
   'Muscle balance': 'Kas dengesi',

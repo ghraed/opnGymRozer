@@ -372,9 +372,6 @@ export default {
   'Remove from routine': 'Aus Routine entfernen',
   'Minimize': 'Verkleinern',
   'Expand': 'Vergrössern',
-  'Invite code': 'Einladungscode',
-  'This app is invite-only — enter the code you were given.': 'Diese App ist nur mit Einladung — gib den Code ein, den du erhalten hast.',
-  'An invite code is required': 'Ein Einladungscode ist erforderlich',
   'Admin dashboard': 'Admin-Dashboard',
   // --- muscle map ---
   'Muscle balance': 'Muskelbalance',

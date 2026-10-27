@@ -296,7 +296,6 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .auth-panel-footer .icn{font-size:13px}
 .auth-setup-note{display:flex;align-items:flex-start;gap:8px;font-size:11px;line-height:1.5;color:var(--auth-muted);margin-top:12px}
 .auth-setup-note .icn{margin-top:1px;font-size:15px;flex:none}
-.auth-invite{letter-spacing:.14em;text-align:center;text-transform:uppercase}
 @media(max-width:900px) and (min-width:701px){
   #app:has(.auth-page){padding-inline:32px}
   .auth-layout{gap:32px}.auth-brand h1{font-size:48px}
@@ -1896,3 +1895,47 @@ body:has(.auth-page){background:radial-gradient(ellipse at 5% 50%,rgba(212,165,5
 .admin-user-filters .admin-search { flex: 1; min-width: 0; margin: 0; }
 .admin-workspace .renewal-list-meta button:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
 .admin-workspace .renewal-filter-trigger:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+
+/* Accounting uses a modal bottom sheet for filters and a compact applied-filter summary. */
+.bottom-sheet-heading { gap: 16px; }
+.bottom-sheet-heading .iconbtn { flex: none; }
+.bottom-sheet-description { margin-top: 4px; color: var(--label-2); font-size: 14px; line-height: 1.6; }
+.revenue-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; padding: 18px; border: 1px solid var(--sep-op); }
+.revenue-filter-summary { display: grid; gap: 8px; min-width: 0; }
+.revenue-filter-summary > strong { font-size: 16px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+.revenue-applied-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+.revenue-applied-filters span { padding: 4px 9px; font-size: 11px; line-height: 1.5; border-radius: 20px; border: 1px solid var(--sep-op); background: var(--surface-2); color: var(--label-2); }
+.revenue-toolbar-actions { display: flex; align-items: center; gap: 8px; }
+.revenue-toolbar-actions > .btn { min-height: 48px; width: auto; padding: 10px 14px; font-size: 14px; }
+.revenue-refresh { width: 48px; min-height: 48px; border: 1px solid var(--sep-op); border-radius: 12px; background: var(--surface-2); }
+.revenue-toolbar-actions :is(button, a):focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+.revenue-filter-badge { position: absolute; top: -5px; inset-inline-end: -5px; display: grid; place-items: center; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 10px; border: 2px solid var(--surface); background: var(--acc); color: var(--on-acc); font-size: 10px; font-weight: 600; }
+.revenue-filter-sheet > :is(form, .bottom-sheet-heading, .bottom-sheet-description) { max-width: 720px; margin-inline: auto; }
+.revenue-filter-sheet fieldset { margin: 22px 0; }
+.revenue-filter-sheet legend { font-size: 13px; font-weight: 600; color: var(--label); }
+.revenue-period-shortcuts { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.revenue-period-shortcuts button { flex: 1; min-height: 44px; padding: 10px 12px; border: 1px solid var(--sep-op); border-radius: 10px; background: var(--surface-2); color: var(--label-2); font-size: 13px; cursor: pointer; }
+.revenue-period-shortcuts button[aria-pressed="true"] { border-color: var(--acc-line); background: var(--acc-soft); color: var(--label); }
+.revenue-date-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.revenue-date-fields label { font-size: 12px; color: var(--label-2); }
+.revenue-date-fields .input { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 48px; padding: 10px; border: 1px solid var(--sep-op); border-radius: 10px; background: var(--surface-2); color: var(--label); font-size: 16px; }
+.revenue-filter-note { color: var(--label-2); font-size: 12px; line-height: 1.5; margin-top: 8px; }
+.revenue-filter-footer { position: sticky; bottom: 0; padding-top: 16px; border-top: 1px solid var(--sep-op); background: var(--surface); }
+.revenue-filter-footer .btn { min-height: 48px; }
+@media (max-width: 600px) {
+  .revenue-controls { gap: 16px; padding: 16px; }
+  .revenue-toolbar-actions { display: grid; grid-template-columns: 48px 48px minmax(0, 1fr); width: 100%; }
+  .revenue-toolbar-actions > .btn { width: 100%; }
+}
+@media (max-width: 360px) {
+  .revenue-date-fields { grid-template-columns: 1fr; }
+  .revenue-period-shortcuts { gap: 6px; }
+  .revenue-period-shortcuts button { padding-inline: 8px; font-size: 12px; }
+}
+
+.revenue-toolbar-actions.is-report { grid-template-columns: repeat(2, 48px); width: auto; margin-inline-start: auto; }
+
+.renewal-payment-confirmation { margin: 16px 0; padding: 16px; border: 1px solid var(--acc-line); border-radius: 12px; background: var(--acc-soft); }
+.renewal-payment-confirmation p { margin: 0 0 8px; }
+.renewal-payment-confirmation label { display: grid; gap: 6px; margin-top: 12px; }
+.renewal-payment-confirmation .input { box-sizing: border-box; width: 100%; min-height: 44px; }

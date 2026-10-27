@@ -26,11 +26,14 @@ test('trainer activation protects new clients while preserving existing accounts
   for (const [id, role, disabled] of [['existing', 'client', false], ['trainer', 'trainer', false], ['disabled', 'client', true]]) {
     await pool.execute('INSERT INTO users(id,name,email,password_hash,role,disabled) VALUES (?,?,?,?,?,?)', [id, id, id + '@test.local', hashPassword(password), role, disabled])
   }
+  await pool.execute("INSERT INTO invites(code,used_by) VALUES ('LEGACY-CODE','existing')")
   await migrate(pool)
   await t.test('migration preserves existing access and suspension, and runs once', async () => {
     const [users] = await pool.query('SELECT id,activated,disabled FROM users')
     assert.ok(users.every(u => u.activated === 1))
     assert.equal(users.find(u => u.id === 'disabled').disabled, 1)
+    assert.equal((await pool.query("SHOW TABLES LIKE 'invites'"))[0].length, 0)
+    assert.equal((await pool.query("SHOW COLUMNS FROM users LIKE 'invited_by'"))[0].length, 0)
     await migrate(pool)
   })
 
@@ -39,7 +42,7 @@ test('trainer activation protects new clients while preserving existing accounts
   const port = process.env.TEST_API_PORT || '33019'
   const child = spawn(process.execPath, ['server.js'], {
     cwd: new URL('../', import.meta.url),
-    env: { ...process.env, DB_NAME: database, PORT: port, ORIGIN: 'http://localhost:' + port, INVITE_ONLY: '0', SESSION_SECRET: 'activation-test-secret' },
+    env: { ...process.env, DB_NAME: database, PORT: port, ORIGIN: 'http://localhost:' + port, SESSION_SECRET: 'activation-test-secret' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let output = ''
@@ -75,6 +78,9 @@ test('trainer activation protects new clients while preserving existing accounts
     assert.equal(me.data.user.activated, false)
     assert.equal((await request('/api/data', { cookie: existing.cookie })).status, 200)
     assert.equal((await request('/api/admin/users', { cookie: trainer.cookie })).status, 200)
+    assert.equal((await request('/api/config')).status, 404)
+    assert.equal((await request('/api/admin/invites', { cookie: trainer.cookie })).status, 404)
+    for (const action of ['new', 'revoke']) assert.equal((await request('/api/admin/invites/' + action, { cookie: trainer.cookie, method: 'POST', body: {} })).status, 404)
   })
   await t.test('pending sessions cannot read/write workout data, send push, or activate themselves', async () => {
     for (const [path, method, body] of [
@@ -178,13 +184,12 @@ test('trainer activation protects new clients while preserving existing accounts
     assert.equal(result.status, 200)
     assert.equal(result.data.user.activated, false)
   })
-  await t.test('trainer deletion removes client data and access, protects trainers, and keeps redeemed invites revoked', async () => {
+  await t.test('trainer deletion removes client data and access and protects trainers', async () => {
     const id = client.data.user.id
     assert.equal((await request('/api/admin/user', { method: 'DELETE', body: { id } })).status, 401)
     assert.equal((await request('/api/admin/user', { cookie: client.cookie, method: 'DELETE', body: { id } })).status, 403)
     assert.equal((await request('/api/admin/user', { cookie: trainer.cookie, method: 'DELETE', body: { id: 'trainer' } })).status, 400)
     assert.equal((await request('/api/admin/user', { cookie: trainer.cookie, method: 'DELETE', body: {} })).status, 400)
-    await pool.execute("INSERT INTO invites(code,used_by,used_at) VALUES ('DELETE-TEST',?,CURRENT_TIMESTAMP(3))", [id])
     await pool.execute("INSERT INTO push_subscriptions(user_id,endpoint_hash,endpoint,keys_json) VALUES (?,UNHEX(SHA2('test',256)),'https://push.invalid/test','{}')", [id])
     await pool.execute("INSERT INTO passkey_credentials(credential_id,user_id,public_key,counter,transports) VALUES ('delete-test',?,'unused',0,'[]')", [id])
     const deleted = await request('/api/admin/user', { cookie: trainer.cookie, method: 'DELETE', body: { id } })
@@ -193,9 +198,6 @@ test('trainer activation protects new clients while preserving existing accounts
       const [[row]] = await pool.execute(`SELECT COUNT(*) total FROM ${table} WHERE ${table === 'users' ? 'id' : 'user_id'}=?`, [id])
       assert.equal(row.total, 0, table)
     }
-    const [[invite]] = await pool.query("SELECT used_by,revoked_at FROM invites WHERE code='DELETE-TEST'")
-    assert.equal(invite.used_by, null)
-    assert.ok(invite.revoked_at)
     assert.equal((await request('/api/me', { cookie: client.cookie })).status, 401)
     assert.equal((await login('new@test.local')).status, 401)
     assert.equal((await request('/api/admin/user?id=' + id, { cookie: trainer.cookie })).status, 404)

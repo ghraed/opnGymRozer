@@ -14,7 +14,7 @@ describe('legacy route migration', () => {
 
 describe('admin page paths', () => {
   it('moves each legacy section to its page and preserves search parameters', () => {
-    for (const section of ['members', 'invites', 'activity']) {
+    for (const section of ['members', 'activity']) {
       expect(legacyAdminPath(`?section=${section}`)).toBe(`/admin/${section}`)
     }
     expect(legacyAdminPath('?section=members&q=a%2Bb')).toBe('/admin/members?q=a%2Bb')

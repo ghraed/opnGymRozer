@@ -223,7 +223,6 @@ function Shell() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/admin" element={user?.admin ? <Admin /> : <Navigate to="/home" replace />} />
               <Route path="/admin/members" element={user?.admin ? <Admin section="members" /> : <Navigate to="/home" replace />} />
-              <Route path="/admin/invites" element={user?.admin ? <Admin section="invites" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/activity" element={user?.admin ? <Admin section="activity" /> : <Navigate to="/home" replace />} />
               <Route path="/admin/renewals" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />
               <Route path="/admin/renewals/:memberId" element={user?.role === 'admin' ? <Renewals /> : <Navigate to="/home" replace />} />

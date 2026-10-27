@@ -15,7 +15,6 @@ import { deliverPush, deliverReminder } from './push.js'
 
 const PORT = +(process.env.PORT || 3000)
 const ORIGIN = process.env.ORIGIN || 'http://localhost:8080'
-const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '')
 const SESSION_DAYS = Math.max(1, +(process.env.SESSION_DAYS || 90) || 90), MAX_BODY = 5 * 1024 * 1024
 const SECURE = /^https:/i.test(ORIGIN) ? ' Secure;' : ''
 const pool = createPool()
@@ -132,20 +131,18 @@ async function runMembershipReminders() {
 }
 setInterval(runMembershipReminders, 60000).unref()
 
-async function inviteIsOpen(code) { const [rows] = await pool.execute('SELECT 1 FROM invites WHERE code=? AND used_by IS NULL AND revoked_at IS NULL', [code]); return !!rows.length }
 
 const routes = {
   'GET /api/health': async (req, res) => { const [[c]] = await pool.query('SELECT COUNT(*) users FROM users'); json(res, 200, { ok: true, database: 'mysql', users: Number(c.users) }) },
-  'GET /api/config': async (req, res) => json(res, 200, { invite_only: INVITE_ONLY }),
   'GET /api/me': async (req, res) => { const u = await requireSession(req, res); if (u) json(res, 200, { user: publicUser(u) }) },
   'POST /api/auth/register': async (req, res) => {
-    const b = await readBody(req), name = String(b.name || '').trim().slice(0, 40), email = emailOf(b.email), password = String(b.password || ''), code = String(b.code || '').trim().toUpperCase()
-    if (!name) return json(res, 400, { error: 'name required' }); if (INVITE_ONLY && !(await inviteIsOpen(code))) return json(res, 403, { error: 'a valid invite code is required' })
+    const b = await readBody(req), name = String(b.name || '').trim().slice(0, 40), email = emailOf(b.email), password = String(b.password || '')
+    if (!name) return json(res, 400, { error: 'name required' })
     if (!validEmail(email)) return json(res, 400, { error: 'valid email required' })
     if (password.length < 8 || password.length > 200) return json(res, 400, { error: 'password must be 8–200 characters' })
     if (await getUserByEmail(pool, email)) return json(res, 409, { error: 'an account already exists for this email' })
     const u = { id: crypto.randomBytes(12).toString('base64url'), name, email, passwordHash: hashPassword(password), created: new Date() }
-    await createPasswordUser(pool, u, INVITE_ONLY ? code : null)
+    await createPasswordUser(pool, u)
     const stored = await getUser(pool, u.id); json(res, 200, { user: publicUser(stored) }, { 'Set-Cookie': sessionCookie(stored) })
   },
   'POST /api/auth/login': async (req, res) => {
@@ -170,11 +167,11 @@ const routes = {
   'GET /api/admin/users': async (req, res) => {
     const actor = await requireTrainer(req, res); if (!actor) return
     const [users] = await pool.query('SELECT u.*,s.client_timestamp,s.progress_json,EXISTS(SELECT 1 FROM push_subscriptions p WHERE p.user_id=u.id) has_push FROM users u LEFT JOIN client_states s ON s.user_id=u.id ORDER BY u.name')
-    json(res, 200, { users: users.filter(u => canViewUser(actor, u)).map(u => { const p = parseJson(u.progress_json), w = p.workouts || [], last = w[w.length - 1]; return { id: u.id, name: u.name, ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled, activated: isStaff(u) || !!u.activated, role: u.role, admin: isStaff(u), workouts: w.length, lastWorkout: last?.d || null, lastSync: Number(u.client_timestamp) || null, hasPush: !!u.has_push, live: livePresence(u.id) } }), invite_only: INVITE_ONLY, now: Date.now() })
+    json(res, 200, { users: users.filter(u => canViewUser(actor, u)).map(u => { const p = parseJson(u.progress_json), w = p.workouts || [], last = w[w.length - 1]; return { id: u.id, name: u.name, ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled, activated: isStaff(u) || !!u.activated, role: u.role, admin: isStaff(u), workouts: w.length, lastWorkout: last?.d || null, lastSync: Number(u.client_timestamp) || null, hasPush: !!u.has_push, live: livePresence(u.id) } }), now: Date.now() })
   },
   'GET /api/admin/user': async (req, res) => {
     const actor = await requireTrainer(req, res); if (!actor) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u || !canViewUser(actor, u)) return json(res, 404, { error: 'no such user' })
-    const data = await readClientState(pool, id), S = data.state || {}; json(res, 200, { user: { ...publicUser(u), ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled, invitedBy: u.invited_by }, onboarding: S.onboarding || null, unit: S.unit || 'kg', profileImage: S.profileImage || null, lastSync: S._ts || null, routines: S.routines || [], bodyweight: S.bodyweight || [], workouts: (S.workouts || []).slice().reverse(), customEx: S.customEx || [], plan: { routines: S.routines || [], week: S.week || {}, dayPlan: S.dayPlan || {}, customEx: S.customEx || [] }, revisions: data.revisions })
+    const data = await readClientState(pool, id), S = data.state || {}; json(res, 200, { user: { ...publicUser(u), ...(actor.role === 'admin' ? { email: u.email } : {}), created: u.created_at, disabled: !!u.disabled }, onboarding: S.onboarding || null, unit: S.unit || 'kg', profileImage: S.profileImage || null, lastSync: S._ts || null, routines: S.routines || [], bodyweight: S.bodyweight || [], workouts: (S.workouts || []).slice().reverse(), customEx: S.customEx || [], plan: { routines: S.routines || [], week: S.week || {}, dayPlan: S.dayPlan || {}, customEx: S.customEx || [] }, revisions: data.revisions })
   },
   'GET /api/admin/client/state': async (req, res) => { const actor = await requireTrainer(req, res); if (!actor) return; const id = new URL(req.url, 'http://x').searchParams.get('id'), u = await getUser(pool, id); if (!u || !canViewUser(actor, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, { user: publicUser(u), ...(await readClientState(pool, id)) }) },
   'PUT /api/admin/client/plan': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req), u = await getUser(pool, b.id); if (!u || !canViewUser(t, u)) return json(res, 404, { error: 'no such user' }); json(res, 200, await saveTrainerPlan(pool, t, u.id, b.plan, b.baseVersion)) },
@@ -321,9 +318,6 @@ const routes = {
     const actor = await requireAdmin(req, res); if (!actor) return
     json(res, 200, { plan: await writeMembershipPlan(pool, actor, await readBody(req), 'status') })
   },
-  'GET /api/admin/invites': async (req, res) => { if (!(await requireTrainer(req, res))) return; const [rows] = await pool.query('SELECT i.*,u.name used_by_name FROM invites i LEFT JOIN users u ON u.id=i.used_by ORDER BY i.created_at DESC'); json(res, 200, { invites: rows.map(i => ({ code: i.code, note: i.note, createdBy: i.created_by, usedBy: i.used_by, usedByName: i.used_by_name, created: i.created_at, usedAt: i.used_at, revoked: !!i.revoked_at })), invite_only: INVITE_ONLY }) },
-  'POST /api/admin/invites/new': async (req, res) => { const t = await requireTrainer(req, res); if (!t) return; const b = await readBody(req); let code; do { code = crypto.randomBytes(8).toString('hex').toUpperCase() } while (await inviteIsOpen(code)); await pool.execute('INSERT INTO invites(code,note,created_by) VALUES (?,?,?)', [code, String(b.note || '').slice(0, 60), t.id]); json(res, 200, { invite: { code, note: b.note || '', createdBy: t.id, created: new Date().toISOString() } }) },
-  'POST /api/admin/invites/revoke': async (req, res) => { if (!(await requireTrainer(req, res))) return; const b = await readBody(req); const [r] = await pool.execute('UPDATE invites SET revoked_at=CURRENT_TIMESTAMP(3) WHERE code=? AND used_by IS NULL', [String(b.code || '').toUpperCase()]); if (!r.affectedRows) return json(res, 400, { error: 'invite not found or already used' }); json(res, 200, { ok: true }) }
 }
 
 const server = http.createServer(async (req, res) => { const url = new URL(req.url, 'http://x'), handler = routes[`${req.method} ${url.pathname}`]; if (!handler) return json(res, 404, { error: 'not found' }); try { await handler(req, res) } catch (e) { console.error(req.method, url.pathname, e); if (!res.headersSent) json(res, e.status || 500, { error: e.message || 'server error', currentVersion: e.currentVersion }) } })

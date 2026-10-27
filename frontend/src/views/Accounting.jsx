@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { api } from '../lib/api.js'
 import { Button } from '../components/ui.jsx'
 import Icon from '../components/Icon.jsx'
+import AccountingFilters from '../components/AccountingFilters.jsx'
+import { financeDate } from '../lib/finance.js'
 import { accountingMoney as money } from '../lib/accounting.js'
 
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -42,6 +44,7 @@ function VoidEntry({ entry, onSaved, onCancel }) {
 }
 export default function Accounting({ kind }) {
   const report = kind === 'report', title = report ? 'Profit & loss' : kind === 'revenue' ? 'Revenue' : 'Expenses'
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [from, setFrom] = useState(() => today().slice(0, 7) + '-01'), [to, setTo] = useState(today)
   const [currency, setCurrency] = useState('all'), [status, setStatus] = useState('posted'), [page, setPage] = useState(1)
   const [data, setData] = useState(null), [summary, setSummary] = useState(null), [loading, setLoading] = useState(true), [error, setError] = useState('')
@@ -58,17 +61,16 @@ export default function Accounting({ kind }) {
     return () => controller.abort()
   }, [from, to, kind, currency, status, page, revision, valid, report])
   const currencies = summary?.currencies.filter(c => currency === 'all' || c.currency === currency) || []
+  const filterCount = Number(from !== today().slice(0, 7) + '-01' || to !== today()) + Number(currency !== 'all') + Number(!report && status !== 'posted')
   return <main className="finance-page accounting-page">
     <header className="hdr finance-header"><Link className="iconbtn" to="/admin/finance" aria-label="Back to finance"><Icon name="chevronLeft" /></Link><div className="grow"><p className="finance-eyebrow">FINANCE / CASH LEDGER</p><h1>{title}</h1><p className="muted">{report ? 'A clear view of money received, money paid and the difference.' : kind === 'revenue' ? 'Record collected payments and other gym income.' : 'Track operating costs and payments made by your gym.'}</p></div></header>
     <nav className="accounting-tabs" aria-label="Accounting tools">{[['revenue', 'Revenue', 'chartLine'], ['expenses', 'Expenses', 'wallet'], ['profit-loss', 'Profit & loss', 'chart']].map(([path, text, icon]) => <Link key={path} to={'/admin/' + path} aria-current={title === text ? 'page' : undefined}><Icon name={icon} />{text}</Link>)}</nav>
     <div className="card accounting-policy"><Icon name="info" size={20} /><p>Cash basis · Only posted ledger entries are included. Paid subscriptions automatically create linked revenue. Record only other receipts here to avoid duplicates. USD and LBP are reported separately.</p></div>
-    <section className="card accounting-controls" aria-label="Report filters"><div className="accounting-fields">
-      <label>From (inclusive)<input className="input" type="date" min="2000-01-01" value={from} onChange={e => { setFrom(e.target.value); setPage(1) }} /></label>
-      <label>To (inclusive)<input className="input" type="date" min={from || '2000-01-01'} value={to} onChange={e => { setTo(e.target.value); setPage(1) }} /></label>
-      <label>Currency<select className="input" value={currency} onChange={e => { setCurrency(e.target.value); setPage(1) }}><option value="all">USD & LBP (separate)</option><option>USD</option><option>LBP</option></select></label>
-      {!report && <label>Entries<select className="input" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}><option value="posted">Posted</option><option value="voided">Voided</option><option value="all">All entries</option></select></label>}
-    </div><div className="accounting-actions"><Button icon="reset" onClick={reload} disabled={loading || !valid}>Refresh</Button>{!report && <Button variant="primary" icon="plus" onClick={() => setEditing(true)} disabled={editing}>Record {kind}</Button>}</div>
-    {!valid && <p role="alert" className="accounting-error">Choose a valid date range starting in 2000 or later.</p>}</section>
+    <section className="card revenue-controls" aria-label={`${title} filters and actions`}>
+      <div className="revenue-filter-summary"><span className="finance-eyebrow">REPORTING PERIOD</span><strong>{valid ? `${financeDate(from)} – ${financeDate(to)}` : 'Choose a date range'}</strong><div className="revenue-applied-filters"><span>{currency === 'all' ? 'All currencies' : currency}</span><span>{report ? 'Posted entries only' : status === 'all' ? 'All entries' : status === 'posted' ? 'Posted entries' : 'Voided entries'}</span></div></div>
+      <div className={'revenue-toolbar-actions' + (report ? ' is-report' : '')}><button type="button" className={'renewal-filter-trigger' + (filterCount ? ' is-active' : '')} aria-label={`Filter ${title.toLowerCase()}${filterCount ? `, ${filterCount} active filters` : ''}`} aria-haspopup="dialog" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(true)}><Icon name="filter" size={20} />{filterCount > 0 && <span className="revenue-filter-badge">{filterCount}</span>}</button><button type="button" className="iconbtn revenue-refresh" aria-label={`Refresh ${title.toLowerCase()}`} disabled={loading || !valid} onClick={reload}><Icon name="reset" /></button>{!report && <Button variant="primary" icon="plus" onClick={() => setEditing(true)} disabled={editing}>Record {kind}</Button>}</div>
+    </section>
+    {filtersOpen && <AccountingFilters kind={kind} value={{ from, to, currency, status }} onClose={() => setFiltersOpen(false)} onApply={filters => { setFrom(filters.from); setTo(filters.to); setCurrency(filters.currency); setStatus(filters.status); setPage(1); setFiltersOpen(false) }} />}
     {editing && <EntryEditor kind={kind} onCancel={() => setEditing(false)} onSaved={() => { setEditing(false); setPage(1); reload() }} />}
     {error && <div className="card" role="alert"><p>{error}</p><Button onClick={reload}>Try again</Button></div>}
     {loading && <p className="card" role="status">Loading {title.toLowerCase()}…</p>}

@@ -64,7 +64,6 @@ export async function manageUser(pool, actor, body, action) {
       await conn.execute(`INSERT INTO users(id,${Object.keys(columns).join(',')}) VALUES (${[id, ...Object.values(columns)].map(() => '?').join(',')})`, [id, ...Object.values(columns)])
       await conn.execute('INSERT INTO client_states(user_id,settings_json,plan_json,progress_json,plan_updated_by) VALUES (?,?,?,?,?)', [id, JSON.stringify({ ...(onboarding ? { onboarding } : {}), ...(profileImage !== undefined ? { profileImage } : {}) }), '{}', '{}', actor.id])
     } else if (action === 'delete') {
-      await conn.execute('UPDATE invites SET revoked_at=COALESCE(revoked_at,CURRENT_TIMESTAMP(3)) WHERE used_by=?', [id])
       await conn.execute('DELETE FROM users WHERE id=?', [id])
     } else {
       if (columns.role && columns.role !== 'client') columns.activated = true

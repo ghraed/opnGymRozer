@@ -14,7 +14,7 @@ export function legacyAdminPath(search, isAdmin = true) {
   if (!params.has('section') && !params.has('q')) return null
   params.delete('section')
   const path = section === 'membership' ? (isAdmin ? '/admin/renewals' : '/admin/members')
-    : ['members', 'invites', 'activity'].includes(section) ? '/admin/' + section
+    : ['members', 'activity'].includes(section) ? '/admin/' + section
     : params.has('q') ? '/admin/members' : '/admin'
   return withQuery(path, params)
 }

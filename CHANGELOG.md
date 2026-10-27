@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Removed invitation codes, invitation-only registration and invitation management.
+  New accounts continue to require staff approval with a membership plan.
+
 ## v1.2.4 — 2026-08-01
 
 The effort ratings you have been recording since v1.2.3 now answer questions, and bodyweight

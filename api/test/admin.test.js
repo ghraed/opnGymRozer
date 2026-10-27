@@ -35,7 +35,7 @@ test('admin manages every role while trainers and clients cannot manage staff', 
     await pool.execute('INSERT INTO client_states(user_id,settings_json,plan_json,progress_json) VALUES (?,?,?,?)', [id, JSON.stringify({ onboarding: profile }), '{}', '{}'])
   }
   const port = process.env.TEST_ADMIN_API_PORT || '33020'
-  const child = spawn(process.execPath, ['server.js'], { cwd: new URL('../', import.meta.url), env: { ...process.env, DB_NAME: database, PORT: port, ORIGIN: 'http://localhost:' + port, INVITE_ONLY: '0', SESSION_SECRET: 'admin-test-secret' }, stdio: ['ignore', 'pipe', 'pipe'] })
+  const child = spawn(process.execPath, ['server.js'], { cwd: new URL('../', import.meta.url), env: { ...process.env, DB_NAME: database, PORT: port, ORIGIN: 'http://localhost:' + port, SESSION_SECRET: 'admin-test-secret' }, stdio: ['ignore', 'pipe', 'pipe'] })
   let output = ''
   child.stdout.on('data', d => { output += d }); child.stderr.on('data', d => { output += d })
   t.after(async () => { if (child.exitCode === null) { child.kill(); await once(child, 'exit') } })
@@ -107,12 +107,9 @@ test('admin manages every role while trainers and clients cannot manage staff', 
     assert.equal((await request('/api/me', { cookie: logged.cookie })).status, 401)
     assert.equal((await mutate('/api/admin/user/role', { id: createdId, role: 'admin' })).status, 200)
     assert.equal((await login('trainernew@test.local')).data.user.role, 'admin')
-    await pool.execute("INSERT INTO invites(code,used_by) VALUES ('ADMIN-DELETE',?)", [createdId])
     assert.equal((await mutate('/api/admin/user', { id: createdId }, 'DELETE')).status, 200)
     const [[state]] = await pool.execute('SELECT COUNT(*) total FROM client_states WHERE user_id=?', [createdId])
     assert.equal(state.total, 0)
-    const [[invite]] = await pool.query("SELECT used_by,revoked_at FROM invites WHERE code='ADMIN-DELETE'")
-    assert.equal(invite.used_by, null); assert.ok(invite.revoked_at)
     assert.equal((await mutate('/api/admin/user', { id: createdId }, 'DELETE')).status, 404)
   })
   await t.test('admin self edits keep a valid session; self deletion, disable and demotion are blocked', async () => {

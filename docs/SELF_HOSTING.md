@@ -90,11 +90,7 @@ Visit `https://gym.example.com`, create your profile, and add it to your home sc
 Anyone who can reach the URL can create their own profile — each gets isolated data. That's the
 default: open signup, no admin.
 
-If you'd rather control who gets in, two optional settings in `.env` turn that around:
-
-```bash
-INVITE_ONLY=1              # new profiles need an invite code
-```
+New clients remain pending until an admin or trainer assigns a membership plan and approves access.
 
 Register your trainer with an email and password, then promote that profile in MySQL:
 
@@ -103,7 +99,7 @@ UPDATE users SET role='trainer' WHERE id='USER_ID';
 ```
 
 The **Trainer dashboard** can monitor every client, edit plans and custom exercises, review full
-progress, manage invites, disable client accounts, and promote more trainers. Access is gated by
+progress and disable client accounts. Access is gated by
 the trainer's signed-in session and enforced server-side.
 
 Prefer to keep the whole thing off the open internet? A VPN or an auth proxy (Authelia, Cloudflare

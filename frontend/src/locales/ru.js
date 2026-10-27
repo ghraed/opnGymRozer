@@ -354,9 +354,6 @@ export default {
   'Remove from routine': 'Убрать из программы',
   'Minimize': 'Свернуть',
   'Expand': 'Развернуть',
-  'Invite code': 'Код приглашения',
-  'This app is invite-only — enter the code you were given.': 'Приложение только по приглашению — введите выданный вам код.',
-  'An invite code is required': 'Требуется код приглашения',
   'Admin dashboard': 'Панель администратора',
   // --- muscle map ---
   'Muscle balance': 'Баланс мышц',

@@ -1,6 +1,6 @@
 import { useStore, hasData } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { passwordLogin, passwordRegister, api } from '../lib/api.js'
+import { passwordLogin, passwordRegister } from '../lib/api.js'
 import { t } from '../lib/i18n.js'
 import { needsActivation } from '../lib/activation.js'
 import { DEMO } from '../lib/demo.js'
@@ -26,20 +26,18 @@ function PasswordField({ value, onChange, busy, register = false, confirm = fals
 
 function RegisterForm({ busy, setBusy }) {
   const { setUser, pushState, pullState } = useStore()
-  const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmPassword, setConfirmPassword] = useState(''), [code, setCode] = useState(''), [inviteOnly, setInviteOnly] = useState(false)
+  const [name, setName] = useState(''), [email, setEmail] = useState(''), [password, setPassword] = useState(''), [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const ref = useRef(null)
   useEffect(() => { if (!window.matchMedia('(max-width: 700px)').matches) ref.current?.focus() }, [])
-  useEffect(() => { api('/api/config').then(c => setInviteOnly(!!c.invite_only)).catch(() => { }) }, [])
   const go = async () => {
     if (busy) return
     if (!name.trim() || !email.trim() || !password || !confirmPassword) return setError(t('Complete all fields'))
     if (password !== confirmPassword) return setError(t('Passwords do not match'))
-    if (inviteOnly && !code.trim()) return setError(t('An invite code is required'))
     setError('')
     setBusy(true)
     try {
-      const u = await passwordRegister(name.trim(), email.trim(), password, code.trim())
+      const u = await passwordRegister(name.trim(), email.trim(), password)
       setUser(u)
       if (needsActivation(u)) return
       if (hasData(useStore.getState().S)) { await pushState(); useUI.getState().toast(t('Profile created — data from this device moved into it')) }
@@ -55,7 +53,6 @@ function RegisterForm({ busy, setBusy }) {
         <PasswordField register value={password} onChange={e => setPassword(e.target.value)} busy={busy} />
         <PasswordField register confirm value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} busy={busy} />
       </div>
-      {inviteOnly && <label className="auth-field">{t('Invite code')}<input className="input auth-invite" name="code" placeholder={t('Invite code')} required maxLength={40} value={code} onChange={e => setCode(e.target.value.toUpperCase())} disabled={busy} /></label>}
       {error && <p className="auth-error" role="alert">{error}</p>}
       <Button type="submit" variant="primary" disabled={busy}>{busy ? t('Creating account…') : t('Create account')}</Button>
     </form>

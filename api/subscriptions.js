@@ -1,4 +1,5 @@
 import crypto from 'node:crypto'
+import { syncSubscriptionRevenue } from './subscription-revenue.js'
 import { SUBSCRIPTION_CYCLES, subscriptionEnd, subscriptionStatus, planCycle, validDate } from './subscription-periods.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -24,8 +25,15 @@ export function subscriptionInput(body) {
     try { endsOn = subscriptionEnd(body.startsOn, body.cycle) } catch (error) { fail(error.message) }
   }
   if (body.notes != null && (typeof body.notes !== 'string' || body.notes.trim().length > 1000)) fail('notes must be at most 1000 characters')
+  let payment = {}
+  if (body.paymentStatus !== undefined) {
+    if (body.paymentStatus !== 'paid') fail('A renewal payment must be marked paid')
+    if (!validDate(body.receivedOn) || body.receivedOn > financeToday()) fail('Choose a valid payment date on or before today')
+    if (!['cash', 'card', 'transfer', 'other'].includes(body.paymentMethod)) fail('Choose a valid payment method')
+    payment = { paymentStatus: 'paid', receivedOn: body.receivedOn, paymentMethod: body.paymentMethod }
+  }
   return { memberId: body.memberId, planId: body.planId, planVersion: body.planVersion, cycle: body.cycle,
-    startsOn: body.startsOn, endsOn, notes: (body.notes || '').trim(), requestKey: body.requestKey }
+    startsOn: body.startsOn, endsOn, notes: (body.notes || '').trim(), requestKey: body.requestKey, ...payment }
 }
 
 const selectSubscriptions = `SELECT s.*,u.name current_member_name,u.email member_email FROM member_subscriptions s LEFT JOIN users u ON u.id=s.member_id`
@@ -98,7 +106,13 @@ async function saveSubscription(pool, actor, body, activation) {
     await conn.execute(`INSERT INTO member_subscriptions(id,member_id,member_name,plan_id,plan_name,cycle,duration_count,duration_unit,starts_on,ends_on,price,currency,notes,request_key,request_hash,created_by)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`, [id, member.id, member.name, plan.id, plan.name, input.cycle, Number(plan.duration_count), plan.duration_unit, input.startsOn, input.endsOn, String(plan.price), plan.currency, input.notes, input.requestKey, requestHash, actor.id])
     if (activation) await conn.execute('UPDATE users SET activated=TRUE WHERE id=?', [member.id])
-    const [[row]] = await conn.execute(selectSubscriptions + ' WHERE s.id=?', [id])
+    let [[row]] = await conn.execute(selectSubscriptions + ' WHERE s.id=?', [id])
+    if (input.paymentStatus === 'paid') {
+      await syncSubscriptionRevenue(conn, row, actor.id, 'paid', input.receivedOn, input.paymentMethod, 'Paid renewal confirmed')
+      await conn.execute("UPDATE member_subscriptions SET payment_status='paid',payment_updated_at=CURRENT_TIMESTAMP(3),payment_updated_by=? WHERE id=?", [actor.id, id])
+      await conn.execute("INSERT INTO subscription_payment_events(subscription_id,previous_status,payment_status,due_on,note,actor_id) VALUES (?,'unconfirmed','paid',NULL,?,?)", [id, 'Paid renewal confirmed', actor.id]);
+      [[row]] = await conn.execute(selectSubscriptions + ' WHERE s.id=?', [id])
+    }
     await conn.commit()
     return { subscription: publicSubscription(row, financeToday()), replayed: false }
   } catch (error) {

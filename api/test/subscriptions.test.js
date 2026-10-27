@@ -5,7 +5,7 @@ import { once } from 'node:events'
 import crypto from 'node:crypto'
 import { createPool, hashPassword, migrate } from '../db.js'
 import { subscriptionEnd, subscriptionStatus, planCycle, validDate } from '../subscription-periods.js'
-import { subscriptionInput, financeToday } from '../subscriptions.js'
+import { subscriptionInput, financeToday, createSubscription } from '../subscriptions.js'
 
 test('subscription periods use calendar months, leap years and explicit end boundaries', () => {
   for (const [start, cycle, end] of [['2027-01-31', 'monthly', '2027-02-28'], ['2028-01-31', 'monthly', '2028-02-29'], ['2027-01-31', 'quarterly', '2027-04-30'], ['2028-02-29', 'yearly', '2029-02-28'], ['2027-11-30', 'quarterly', '2028-02-29']]) assert.equal(subscriptionEnd(start, cycle), end)
@@ -37,6 +37,9 @@ test('subscription inputs reject malformed dates, periods, identifiers and missi
   assert.equal(subscriptionInput(input).endsOn, '2027-02-01')
   assert.equal(subscriptionInput({ ...input, cycle: 'plan', endsOn: '2099-01-01', durationCount: 999 }).endsOn, null)
   assert.throws(() => subscriptionInput({ ...input, cycle: 'plan', startsOn: '2027-02-30' }), { status: 400 })
+  const paid = { ...input, paymentStatus: 'paid', receivedOn: financeToday(), paymentMethod: 'card' }
+  assert.equal(subscriptionInput(paid).paymentStatus, 'paid')
+  for (const patch of [{ paymentStatus: 'unpaid' }, { receivedOn: undefined }, { receivedOn: '2027-02-30' }, { receivedOn: '9999-01-01' }, { paymentMethod: 'invalid' }]) assert.throws(() => subscriptionInput({ ...paid, ...patch }), { status: 400 })
 })
 
 const database = process.env.TEST_SUBSCRIPTION_DB_NAME
@@ -148,4 +151,64 @@ test('subscriptions and Finance are restricted to admins and retain accurate mem
     await migrate(pool)
     assert.ok((await listing()).data.subscriptions.length >= 8)
   })
+  await t.test('confirmed paid renewals create exactly one linked receipt and payment audit event', async () => {
+    const receivedOn = financeToday()
+    const input = body('monthly', '2100-01-01', { paymentStatus: 'paid', receivedOn, paymentMethod: 'card', price: '0', currency: 'LBP' })
+    const responses = await Promise.all([post('/api/admin/subscriptions', input), post('/api/admin/subscriptions', input)])
+    assert.deepEqual(responses.map(response => response.status).sort(), [200, 201])
+    const term = responses[0].data.subscription
+    assert.equal(term.paymentStatus, 'paid')
+    assert.equal(term.price, '99.99')
+    assert.equal((await post('/api/admin/subscriptions', input)).data.subscription.id, term.id)
+    assert.equal((await post('/api/admin/subscriptions', { ...input, paymentMethod: 'cash' })).status, 409)
+    const [receipts] = await pool.execute('SELECT * FROM finance_entries WHERE source_subscription_id=?', [term.id])
+    assert.equal(receipts.length, 1)
+    assert.equal(String(receipts[0].amount), '99.99')
+    assert.equal(receipts[0].currency, 'USD')
+    assert.equal(receipts[0].method, 'card')
+    assert.equal(receipts[0].entry_date.toISOString().slice(0, 10), receivedOn, 'Revenue uses the payment date, not future coverage dates')
+    const [events] = await pool.execute('SELECT * FROM subscription_payment_events WHERE subscription_id=?', [term.id])
+    assert.equal(events.length, 1)
+    assert.equal(events[0].previous_status, 'unconfirmed')
+    assert.equal(events[0].payment_status, 'paid')
+    const period = new URLSearchParams({ from: receivedOn, to: receivedOn })
+    const report = await get('/api/admin/profit-loss?' + period)
+    assert.equal(report.data.currencies.find(row => row.currency === 'USD').revenue, '99.99')
+    const ledger = await get('/api/admin/ledger?' + period + '&kind=revenue&currency=USD&status=posted&page=1')
+    assert.ok(ledger.data.entries.some(entry => entry.sourceSubscriptionId === term.id))
+  })
+  await t.test('a failed revenue write rolls back the renewal and allows a safe retry', async () => {
+    const input = body('monthly', '2101-01-01', { paymentStatus: 'paid', receivedOn: financeToday(), paymentMethod: 'cash' })
+    // Inject a receipt-write failure while using a real connection and transaction.
+    // This needs no global MySQL settings or privileged database triggers.
+    const failingPool = { async getConnection() {
+      const connection = await pool.getConnection()
+      return new Proxy(connection, { get(target, key) {
+        if (key === 'execute') return (sql, values) => {
+          if (sql.startsWith('INSERT INTO finance_entries')) throw new Error('Receipt failure test')
+          return target.execute(sql, values)
+        }
+        const value = Reflect.get(target, key)
+        return typeof value === 'function' ? value.bind(target) : value
+      } })
+    } }
+    await assert.rejects(createSubscription(failingPool, { id: 'admin' }, input), /Receipt failure test/)
+    const [[count]] = await pool.execute('SELECT COUNT(*) total FROM member_subscriptions WHERE request_key=?', [input.requestKey])
+    assert.equal(count.total, 0)
+    const retry = await post('/api/admin/subscriptions', input)
+    assert.equal(retry.status, 201)
+    assert.equal(retry.data.subscription.paymentStatus, 'paid')
+  })
+  await t.test('free paid terms create no revenue and ordinary new terms remain unconfirmed', async () => {
+    const plan = (await post('/api/admin/membership-plans', { name: 'Free month', durationCount: 1, durationUnit: 'month', price: '0', currency: 'USD' })).data.plan
+    const free = await post('/api/admin/subscriptions', { memberId: 'client', planId: plan.id, planVersion: plan.version, cycle: plan.subscriptionCycle, startsOn: '2102-01-01', requestKey: crypto.randomUUID(), paymentStatus: 'paid', receivedOn: financeToday(), paymentMethod: 'other' })
+    assert.equal(free.status, 201)
+    assert.equal(free.data.subscription.paymentStatus, 'paid')
+    const [[count]] = await pool.execute('SELECT COUNT(*) total FROM finance_entries WHERE source_subscription_id=?', [free.data.subscription.id])
+    assert.equal(count.total, 0)
+    const ordinary = await post('/api/admin/subscriptions', body('monthly', '2103-01-01'))
+    assert.equal(ordinary.status, 201)
+    assert.equal(ordinary.data.subscription.paymentStatus, 'unconfirmed')
+  })
+
 })

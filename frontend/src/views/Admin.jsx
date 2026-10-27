@@ -28,31 +28,6 @@ const rel = ts => {
 }
 const dur = ms => { const m = Math.max(0, Math.floor(ms / 60000)); return m < 60 ? m + 'm' : Math.floor(m / 60) + 'h' + (m % 60) + 'm' }
 
-function InvitesCard({ invites, reload }) {
-  const toast = useUI(s => s.toast)
-  const gen = () => api('/api/admin/invites/new', { method: 'POST', body: '{}' })
-    .then(({ invite }) => { navigator.clipboard?.writeText(invite.code).catch(() => {}); toast('Code ' + invite.code + ' created & copied'); reload() })
-    .catch(e => toast(e.message))
-  const revoke = code => api('/api/admin/invites/revoke', { method: 'POST', body: JSON.stringify({ code }) })
-    .then(() => { toast('Code revoked'); reload() }).catch(e => toast(e.message))
-  const open = (invites || []).filter(i => !i.usedBy)
-  const used = (invites || []).filter(i => i.usedBy)
-  return <div className="card">
-    <div className="row between"><h2 style={{ margin: 0 }}>Invite codes</h2>
-      <Button variant="primary" size="sm" onClick={gen} icon="plus">Generate</Button></div>
-    <div className="small muted" style={{ margin: '6px 0 10px' }}>{open.length} unused · {used.length} redeemed</div>
-    {open.map(i => <div key={i.code} className="row between" style={{ padding: '7px 2px', borderBottom: '1px solid var(--sep)' }}>
-      <span style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', fontWeight: 500, letterSpacing: '.06em' }}
-        onClick={() => { navigator.clipboard?.writeText(i.code).catch(() => {}); toast('Copied ' + i.code) }}>{i.code}</span>
-      <button className="iconbtn" style={{ width: 32, height: 30, borderRadius: 8, fontSize: 15, color: 'var(--red)' }} onClick={() => revoke(i.code)} aria-label="revoke"><Icon name="trash" /></button>
-    </div>)}
-    {used.map(i => <div key={i.code} className="row between dim" style={{ padding: '7px 2px', fontSize: '.8rem' }}>
-      <span style={{ fontFamily: 'monospace' }}>{i.code}</span><span>→ {i.usedByName || 'used'}</span>
-    </div>)}
-    {!open.length && !used.length && <div className="dim small">No codes yet — generate one to invite someone.</div>}
-  </div>
-}
-
 function DashboardTool({ to, icon, title, description, meta, featured = false }) {
   return <Link to={to} className={'admin-tool' + (featured ? ' admin-tool-featured' : '')}>
     <span className="admin-tool-icon"><Icon name={icon} size={24} /></span>
@@ -68,12 +43,10 @@ export default function Admin({ section = 'overview' }) {
   const [creating, setCreating] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [users, setUsers] = useState(null)
-  const [invites, setInvites] = useState(null)
-  const [inviteOnly, setInviteOnly] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const legacyPath = section === 'overview' || searchParams.has('section') ? legacyAdminPath(searchParams, isAdmin) : null
   useEffect(() => { window.scrollTo(0, 0) }, [section])
-  const sectionTitle = { members: isAdmin ? 'Members & staff' : 'Clients', invites: 'Invite codes', activity: 'Training activity' }[section]
+  const sectionTitle = { members: isAdmin ? 'Members & staff' : 'Clients', activity: 'Training activity' }[section]
   const search = searchParams.get('q') || ''
   const requestedRole = searchParams.get('role')
   const role = isAdmin && ['client', 'trainer', 'admin'].includes(requestedRole) ? requestedRole : 'all'
@@ -88,10 +61,9 @@ export default function Admin({ section = 'overview' }) {
     return params
   }, { replace: true })
 
-  const loadUsers = () => api('/api/admin/users').then(d => { setUsers(d.users); setInviteOnly(d.invite_only) }).catch(e => toast(e.message || 'Failed to load'))
-  const loadInvites = () => api('/api/admin/invites').then(d => setInvites(d.invites)).catch(() => {})
+  const loadUsers = () => api('/api/admin/users').then(d => { setUsers(d.users) }).catch(e => toast(e.message || 'Failed to load'))
   // poll every 15s so the "training now" section stays live without a manual refresh
-  useEffect(() => { if (!user?.admin) return; loadUsers(); loadInvites(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
+  useEffect(() => { if (!user?.admin) return; loadUsers(); const iv = setInterval(loadUsers, 15000); return () => clearInterval(iv) }, [])
   if (!user?.admin) return null
   if (legacyPath) return <Navigate to={legacyPath} replace />
 
@@ -116,8 +88,8 @@ export default function Admin({ section = 'overview' }) {
     {section !== 'overview' && <Link className="admin-back" to="/admin"><Icon name="chevronLeft" />Back to dashboard</Link>}
     <div className="hdr admin-hdr">
       <div className="admin-title"><p className="admin-eyebrow">{isAdmin ? 'ADMIN WORKSPACE' : 'TRAINER WORKSPACE'}</p><h1>{sectionTitle || (isAdmin ? 'Admin dashboard' : 'Trainer dashboard')}</h1>
-        <p className="admin-intro">{section === 'overview' ? 'Your gym, organised. Choose a tool to get started.' : section === 'members' ? (isAdmin ? 'Manage accounts, activation and training profiles.' : 'Manage client activation and training profiles.') : section === 'invites' ? 'Create and manage codes to welcome new members.' : 'See who is training and open their workout profile.'}</p></div>
-      <button className="iconbtn admin-refresh" onClick={() => { loadUsers(); loadInvites() }} aria-label="Refresh dashboard"><Icon name="reset" /></button>
+        <p className="admin-intro">{section === 'overview' ? 'Your gym, organised. Choose a tool to get started.' : section === 'members' ? (isAdmin ? 'Manage accounts, activation and training profiles.' : 'Manage client activation and training profiles.') : 'See who is training and open their workout profile.'}</p></div>
+      <button className="iconbtn admin-refresh" onClick={loadUsers} aria-label="Refresh dashboard"><Icon name="reset" /></button>
     </div>
 
     <section className="admin-metrics" aria-label="Gym overview">
@@ -132,7 +104,6 @@ export default function Admin({ section = 'overview' }) {
         <div className="admin-section-heading"><h2 id="admin-people-title">{isAdmin ? 'Gym management' : 'Client management'}</h2><p>People, access and daily activity</p></div>
         <div className="admin-menu-grid">
           <DashboardTool to="/admin/members" icon="people" title={isAdmin ? 'Accounts & staff' : 'Clients'} description={isAdmin ? 'Manage members, trainers and admin accounts.' : 'View clients and manage their training.'} meta={users ? `${users.length} accounts · ${pendingCount} pending activation` : 'Loading accounts…'} />
-          <DashboardTool to="/admin/invites" icon="key" title="Invite codes" description="Create invitations and manage access to your gym." meta={invites ? `${invites.filter(i => !i.usedBy).length} codes available` : 'Manage invitations'} />
           <DashboardTool to="/admin/activity" icon="figureStrength" title="Training activity" description="Follow live workouts and open member profiles." meta={users ? `${liveUsers.length} training now · ${activeCount} active this week` : 'Loading activity…'} />
         </div>
       </section>
@@ -159,7 +130,6 @@ export default function Admin({ section = 'overview' }) {
     </div>}
 
     </section>}
-    {section === 'invites' && <InvitesCard invites={invites} reload={loadInvites} />}
 
     {section === 'members' && <section aria-labelledby="admin-member-title">
     <div className="admin-member-heading"><h2 id="admin-member-title">{isAdmin ? 'All users' : 'Clients'}</h2>

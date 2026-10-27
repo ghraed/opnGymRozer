@@ -7,8 +7,8 @@ export async function api(path, opts) {
   return data
 }
 
-export async function passwordRegister(name, email, password, code) {
-  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password, code: code || '' }) })
+export async function passwordRegister(name, email, password) {
+  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) })
   return res.user
 }
 export async function passwordLogin(email, password, remember = true) {
