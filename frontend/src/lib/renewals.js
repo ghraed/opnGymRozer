@@ -30,3 +30,14 @@ export function renewalMembers(users, subscriptions, plans, today) {
       quickPlan: monthly.find(p => p.id === lastMonthly?.planId) || monthly[0] || null }
   })
 }
+
+export function renewalHistory(member, today) {
+  const history = [...member.history].sort((a, b) => b.startsOn.localeCompare(a.startsOn) || String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(a.id).localeCompare(String(b.id)))
+  const upcoming = history.filter(term => term.status !== 'cancelled' && term.startsOn > today).sort((a, b) => a.startsOn.localeCompare(b.startsOn))
+  const current = member.current
+  const day = date => Date.parse(date + 'T00:00:00Z') / 86400000
+  const daysLeft = current ? Math.max(0, Math.round(day(current.endsOn) - day(today))) : null
+  const duration = current ? day(current.endsOn) - day(current.startsOn) : 0
+  const progress = duration > 0 ? Math.max(0, Math.min(100, Math.round((day(today) - day(current.startsOn)) / duration * 100))) : 0
+  return { history, upcoming, current, daysLeft, progress, paidCount: history.filter(term => term.paymentStatus === 'paid').length }
+}

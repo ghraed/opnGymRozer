@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { renewalEnd, renewalMembers } from './renewals.js'
+import { renewalEnd, renewalMembers, renewalHistory } from './renewals.js'
 
 describe('fast member renewals', () => {
   const plans = [{ id: 'monthly', active: true, durationCount: 1, durationUnit: 'month' }, { id: 'usual', active: true, durationCount: 1, durationUnit: 'month' }, { id: 'archived', active: false, durationCount: 1, durationUnit: 'month' }, { id: 'daily', active: true, durationCount: 1, durationUnit: 'day' }]
@@ -28,5 +28,32 @@ describe('fast member renewals', () => {
     for (const [start, durationCount, durationUnit, end] of [['2028-02-28', 2, 'day', '2028-03-01'], ['2027-12-25', 2, 'week', '2028-01-08'], ['2027-12-31', 2, 'month', '2028-02-29'], ['2028-02-29', 2, 'year', '2030-02-28'], ['2027-01-31', 1, 'month', '2027-02-28']]) expect(renewalEnd(start, { durationCount, durationUnit })).toBe(end)
     expect(renewalEnd('9999-12-31', plans[3])).toBe(null)
     expect(renewalEnd('', plans[0])).toBe(null)
+  })
+})
+
+
+describe('member renewal history', () => {
+  const current = { id: 'current', startsOn: '2028-02-01', endsOn: '2028-03-01', status: 'active', paymentStatus: 'paid' }
+  const next = { id: 'next', startsOn: '2028-03-01', endsOn: '2028-04-01', status: 'scheduled', paymentStatus: 'unconfirmed' }
+  const cancelled = { id: 'cancelled', startsOn: '2028-05-01', endsOn: '2028-06-01', status: 'cancelled', paymentStatus: 'paid' }
+  it('retains cancelled terms in the timeline without counting them as future coverage', () => {
+    const member = { history: [current, cancelled, next], current }
+    const result = renewalHistory(member, '2028-02-28')
+    expect(result.history.map(term => term.id)).toEqual(['cancelled', 'next', 'current'])
+    expect(result.upcoming.map(term => term.id)).toEqual(['next'])
+    expect(result.paidCount).toBe(2)
+    expect(member.history.map(term => term.id)).toEqual(['current', 'cancelled', 'next'])
+  })
+  it('uses calendar dates for remaining coverage across leap days', () => {
+    expect(renewalHistory({ history: [current], current }, '2028-02-28')).toMatchObject({ daysLeft: 2, progress: 93 })
+    expect(renewalHistory({ history: [current], current }, '2028-02-29')).toMatchObject({ daysLeft: 1, progress: 97 })
+  })
+  it('keeps progress bounded when coverage data is stale', () => {
+    expect(renewalHistory({ history: [current], current }, '2028-01-31')).toMatchObject({ progress: 0 })
+    expect(renewalHistory({ history: [current], current }, '2028-03-02')).toMatchObject({ daysLeft: 0, progress: 100 })
+  })
+  it('handles members with no terms or no current coverage', () => {
+    expect(renewalHistory({ history: [] }, '2028-02-28')).toMatchObject({ history: [], upcoming: [], daysLeft: null, progress: 0, paidCount: 0 })
+    expect(renewalHistory({ history: [next] }, '2028-02-28')).toMatchObject({ upcoming: [next], daysLeft: null })
   })
 })

@@ -52,13 +52,13 @@ function ReminderSettings({ settings, onSaved }) {
   </fieldset></form></details>
 }
 
-export default function RenewalFollowups() {
+export default function RenewalFollowups({ memberId, onUpdated }) {
   const toast = useUI(s => s.toast)
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
-  const [filter, setFilter] = useState('attention')
+  const [filter, setFilter] = useState(memberId ? 'all' : 'attention')
   const [query, setQuery] = useState('')
   const [review, setReview] = useState(null)
   const [pending, setPending] = useState(null)
@@ -73,7 +73,10 @@ export default function RenewalFollowups() {
     try { const { reminder } = await api('/api/admin/subscription/remind', { method: 'POST', body: JSON.stringify({ id: subscription.id, kind }) }); toast(deliveryLabels[reminder.delivery] || 'Reminder recorded'); reload() }
     catch (e) { toast(e.message) } finally { setPending(null) }
   } })
-  const rows = (data?.subscriptions || []).filter(s => {
+  const subscriptions = (data?.subscriptions || []).filter(subscription => !memberId || subscription.memberId === memberId)
+  const subscriptionIds = new Set(subscriptions.map(subscription => subscription.id))
+  const reminders = (data?.history || []).filter(item => !memberId || subscriptionIds.has(item.subscriptionId))
+  const rows = subscriptions.filter(s => {
     const attention = ['overdue', 'due_soon'].includes(s.renewalStatus) || s.paymentStatus === 'unpaid'
     const matches = filter === 'all' || (filter === 'attention' ? attention && s.status !== 'cancelled' : filter === 'unpaid' ? s.paymentStatus === 'unpaid' && s.status !== 'cancelled' : filter === 'unconfirmed' ? s.paymentStatus === 'unconfirmed' && s.status !== 'cancelled' : s.renewalStatus === filter)
     return matches && [s.memberName, s.memberEmail, s.planName].filter(Boolean).some(value => value.toLowerCase().includes(query.trim().toLowerCase()))
@@ -82,10 +85,10 @@ export default function RenewalFollowups() {
     <div className="membership-toolbar"><span className="small muted">{data ? 'Status as of ' + financeDate(data.asOf) : 'Loading tracker…'}</span><Button disabled={loading || !!review || !!pending} onClick={reload}>Refresh tracker</Button></div>
     {error && <div className="card" role="alert"><p>{error}</p><Button onClick={reload}>Try again</Button></div>}
     {data && <>
-      <section className="finance-summary" aria-label="Renewal overview">{[['Expiring soon', s => s.renewalStatus === 'due_soon'], ['Renewal overdue', s => s.renewalStatus === 'overdue'], ['Awaiting payment', s => s.paymentStatus === 'unpaid' && s.status !== 'cancelled'], ['Payment not reviewed', s => s.paymentStatus === 'unconfirmed' && s.status !== 'cancelled']].map(([label, fn]) => <div className="card" key={label}><span className="small muted">{label}</span><strong>{data.subscriptions.filter(fn).length}</strong></div>)}</section>
-      <ReminderSettings key={'settings-' + revision} settings={data.settings} onSaved={() => { toast('Reminder settings saved'); reload() }} />
+      <section className="finance-summary" aria-label="Renewal overview">{[['Expiring soon', s => s.renewalStatus === 'due_soon'], ['Renewal overdue', s => s.renewalStatus === 'overdue'], ['Awaiting payment', s => s.paymentStatus === 'unpaid' && s.status !== 'cancelled'], ['Payment not reviewed', s => s.paymentStatus === 'unconfirmed' && s.status !== 'cancelled']].map(([label, fn]) => <div className="card" key={label}><span className="small muted">{label}</span><strong>{subscriptions.filter(fn).length}</strong></div>)}</section>
+      {!memberId && <ReminderSettings key={'settings-' + revision} settings={data.settings} onSaved={() => { toast('Reminder settings saved'); reload() }} />}
       <p className="small muted">Older subscriptions start as “Not reviewed”. Review payment and set a due date to enable payment reminders. Paid or waived terms stop payment reminders; a next term stops renewal reminders.</p>
-      {review && <PaymentReview subscription={review} today={data.asOf} onCancel={() => setReview(null)} onSaved={() => { setReview(null); toast('Payment status updated'); reload() }} />}
+      {review && <PaymentReview subscription={review} today={data.asOf} onCancel={() => setReview(null)} onSaved={() => { setReview(null); toast('Payment status updated'); reload(); onUpdated?.() }} />}
       <div className="membership-filters"><label>Show<select className="input" aria-label="Renewal filter" value={filter} onChange={e => setFilter(e.target.value)}>{[['attention', 'Needs attention'], ['due_soon', 'Expiring soon'], ['overdue', 'Renewal overdue'], ['unpaid', 'Awaiting payment'], ['unconfirmed', 'Payment not reviewed'], ['renewed', 'Next term recorded'], ['all', 'All terms']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Search<input className="input" type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Member or plan" /></label></div>
       {loading ? <p role="status">Refreshing tracker…</p> : !error && <div className="subscription-list">{rows.map(s => <article className="card subscription-card" key={s.id}>
         <div className="row between"><h2>{s.memberName}</h2><span className="tag">{renewalLabels[s.renewalStatus]}</span></div><p>{s.planName} · {membershipPrice(s)}</p>
@@ -93,13 +96,13 @@ export default function RenewalFollowups() {
         {s.paymentDueOn && <p className={'small' + (s.paymentOverdue ? ' renewal-overdue' : ' muted')}>Payment {s.paymentOverdue ? 'overdue since ' : 'due on '}{financeDate(s.paymentDueOn)}</p>}
         {!s.canRemind && <p className="small muted">Reminders unavailable: member account is deleted, disabled or no longer a client.</p>}
         <div className="client-account-actions"><Button disabled={!!review || !!pending} onClick={() => setReview(s)}>Review payment</Button>
-          {s.memberId && s.status !== 'cancelled' && !s.nextTermId && <Link className="btn" to={'/admin/renewals/' + encodeURIComponent(s.memberId)}>Add next term</Link>}
+          {s.memberId && s.status !== 'cancelled' && !s.nextTermId && <Link className="btn" state={{ choosePlan: true }} to={'/admin/renewals/' + encodeURIComponent(s.memberId)}>Add next term</Link>}
           {s.canRemind && s.status !== 'cancelled' && !s.nextTermId && <Button disabled={!!review || !!pending} onClick={() => send(s, 'renewal')}>Remind renewal</Button>}
           {s.canRemind && s.status !== 'cancelled' && s.paymentStatus === 'unpaid' && <Button disabled={!!review || !!pending} onClick={() => send(s, 'payment')}>Remind payment</Button>}
         </div>
         <details className="renewal-audit"><summary>Payment review history</summary>{data.paymentEvents.filter(e => e.subscriptionId === s.id).map((event, i) => <p className="small" key={i}><strong>{paymentLabels[event.to]}</strong> · {event.actor}<br />{new Date(event.createdAt).toLocaleString()}<br />{event.note}</p>)}{!data.paymentEvents.some(e => e.subscriptionId === s.id) && <p className="small muted">No recent review recorded.</p>}</details>
       </article>)}{!rows.length && <div className="card empty">No matching follow-ups.</div>}</div>}
-      <details className="card renewal-history"><summary>Recent reminder history</summary><p className="small muted">Latest 100 reminders. “Push accepted” confirms acceptance by the push service, not that the member saw it.</p>{data.history.map(item => <div key={item.id} className="client-row"><div><strong>{item.memberName}</strong><p className="small muted">{item.kind} · {financeDate(item.date)} · {item.source}</p></div><div><span className="tag">{deliveryLabels[item.delivery]}</span><p className="small muted">{item.detail} · {item.attempts} delivery attempts</p></div></div>)}{!data.history.length && <p className="small muted">No reminders sent yet.</p>}</details>
+      <details className="card renewal-history"><summary>Recent reminder history</summary><p className="small muted">Latest 100 reminders. “Push accepted” confirms acceptance by the push service, not that the member saw it.</p>{reminders.map(item => <div key={item.id} className="client-row"><div><strong>{item.memberName}</strong><p className="small muted">{item.kind} · {financeDate(item.date)} · {item.source}</p></div><div><span className="tag">{deliveryLabels[item.delivery]}</span><p className="small muted">{item.detail} · {item.attempts} delivery attempts</p></div></div>)}{!reminders.length && <p className="small muted">{memberId ? 'No reminders in recent history.' : 'No reminders sent yet.'}</p>}</details>
     </>}
   </section>
 }
